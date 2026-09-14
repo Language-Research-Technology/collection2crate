@@ -5,34 +5,26 @@
 // builder) without importing anything from the app.
 
 /**
- * Open a modal.
- *
- * Two ways to fill it, both supported:
- *  - declarative: pass `body` plus `actions`, and the helper builds the
- *    footer buttons and resolves with the chosen action's `value`;
- *  - self-built: pass `render(body, close)` and build the content and its
- *    own buttons yourself, calling `close(value)` to resolve. Plugins use
- *    this shape (roctable's table config, generic-input's new-files
- *    confirmation), so it must keep working exactly as they call it.
+ * Open a modal. One shape, used by the app and by plugins alike: `body`
+ * and/or `onMount` fill the content, `actions` become the footer buttons,
+ * and the promise resolves with the chosen action's `value` (called, if it
+ * is a function, at click time, so an action can hand back state the
+ * content has since edited). Dismissing — ✕, backdrop click, Escape —
+ * resolves null.
  *
  * @param {object} args
  * @param {string} args.title
  * @param {Node|string} [args.body]          content, or HTML string
  * @param {Array<{label: string, value?: any, primary?: boolean}>} [args.actions]
  * @param {function} [args.onMount]          called with (body, { close })
- * @param {function} [args.render]           called with (body, close)
- * @param {function} [args.onDismiss]        what ✕ / backdrop / Escape resolve to
  * @param {string} [args.modalClassName]     extra class on the panel
- * @returns {Promise<any>} the chosen value, or onDismiss()'s value (null by
- *   default) if dismissed
+ * @returns {Promise<any>} the chosen action's value, or null if dismissed
  */
 export function openModal({
   title,
   body,
   actions = [],
   onMount = null,
-  render = null,
-  onDismiss = null,
   modalClassName = "",
 } = {}) {
   return new Promise((resolve) => {
@@ -80,10 +72,7 @@ export function openModal({
       resolve(value);
     }
     function onKeydown(event) {
-      if (event.key === "Escape") dismiss();
-    }
-    function dismiss() {
-      close(typeof onDismiss === "function" ? onDismiss() : null);
+      if (event.key === "Escape") close(null);
     }
 
     for (const action of actions) {
@@ -97,14 +86,13 @@ export function openModal({
       footer.append(button);
     }
 
-    closeButton.addEventListener("click", dismiss);
+    closeButton.addEventListener("click", () => close(null));
     backdrop.addEventListener("mousedown", (event) => {
-      if (event.target === backdrop) dismiss();
+      if (event.target === backdrop) close(null);
     });
     document.addEventListener("keydown", onKeydown, true);
 
     if (typeof onMount === "function") onMount(content, { close });
-    if (typeof render === "function") render(content, close);
     (panel.querySelector("input, select, textarea, button") || closeButton).focus();
   });
 }
