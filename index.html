@@ -265,29 +265,17 @@
     <div class="two-col-grid vis-grid">
       <div class="col-left">
         <h3 class="section-heading">Data</h3>
-        <ul class="entity-list" id="vis-file-list" aria-label="Tabular files"></ul>
         <label class="field">
-          <span class="field-label">Chart</span>
-          <select id="vis-chart-type">
-            <option value="bar">Bar</option>
-            <option value="line">Line</option>
-            <option value="scatter">Scatter</option>
-          </select>
+          <span class="field-label">Output folder</span>
+          <select id="vis-directory" aria-describedby="vis-data-status"></select>
         </label>
-        <label class="field">
-          <span class="field-label">Category / x</span>
-          <select id="vis-x"></select>
-        </label>
-        <label class="field">
-          <span class="field-label">Value / y</span>
-          <select id="vis-y"></select>
-        </label>
+        <p class="field-hint" id="vis-data-status" aria-live="polite"></p>
+
+        <h3 class="section-heading">Panels</h3>
+        <ul class="entity-list" id="vis-panel-list" aria-label="Visualisation panels"></ul>
       </div>
       <div class="col-right">
-        <div class="panel" id="vis-chart" aria-live="polite">
-          <p class="empty-note">Choose a file on the left.</p>
-        </div>
-        <div class="table-scroll"><table class="data-table mono" id="vis-table"></table></div>
+        <div class="panel" id="vis-panel"></div>
       </div>
     </div>
   </section>

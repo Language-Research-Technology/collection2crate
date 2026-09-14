@@ -4,7 +4,7 @@
 // do). Which plugins appear here comes from the PLUGINS env var; see
 // SPEC.md §4.7a.
 //
-//   PLUGINS=generic-input,docx-input,xlsx-crate-input,austlang,file-format-identify,ca-data-prep,chat-export,merge,roctable,validate-crate,ro-crate-json-output,ro-crate-xlsx-output,ro-crate-html-output
+//   PLUGINS=generic-input,docx-input,xlsx-crate-input,austlang,file-format-identify,ca-data-prep,chat-export,merge,roctable,validate-crate,ro-crate-json-output,ro-crate-xlsx-output,ro-crate-html-output,concordance,ngrams,chart
 
 import { buildDeps } from "./deps.js";
 import { createPlugin as create_generic_input } from "collection2crate-plugins/plugins/generic-input/index.js";
@@ -20,6 +20,9 @@ import { createPlugin as create_validate_crate } from "collection2crate-plugins/
 import { createPlugin as create_ro_crate_json_output } from "collection2crate-plugins/plugins/ro-crate-json-output/index.js";
 import { createPlugin as create_ro_crate_xlsx_output } from "collection2crate-plugins/plugins/ro-crate-xlsx-output/index.js";
 import { createPlugin as create_ro_crate_html_output } from "collection2crate-plugins/plugins/ro-crate-html-output/index.js";
+import { createPlugin as create_concordance } from "collection2crate-plugins/plugins/concordance/index.js";
+import { createPlugin as create_ngrams } from "collection2crate-plugins/plugins/ngrams/index.js";
+import { createPlugin as create_chart } from "collection2crate-plugins/plugins/chart/index.js";
 
 // One deps object, built once, handed to every factory (SPEC.md §4.7a).
 const deps = buildDeps();
@@ -44,6 +47,9 @@ export const PLUGINS = [
   create_ro_crate_json_output(deps),
   create_ro_crate_xlsx_output(deps),
   create_ro_crate_html_output(deps),
+  create_concordance(deps),
+  create_ngrams(deps),
+  create_chart(deps),
 ];
 
 /** Every plugin's Build-panel option schema, in plugin order. */
@@ -54,6 +60,18 @@ export function composeOptionSchema() {
 /** Every plugin's Settings-modal schema, in plugin order. */
 export function composeSettingsSchema() {
   return PLUGINS.map((plugin) => plugin.settingsSchema).filter(Boolean);
+}
+
+/**
+ * Every plugin's Visualise panel, in plugin order.
+ *
+ * A panel is something a plugin offers, like an option schema — so leaving a
+ * plugin out of the PLUGINS selection takes its panel with it (SPEC.md §6.4).
+ */
+export function composeVisualisationPanels() {
+  return PLUGINS
+    .filter((plugin) => plugin.visualisation?.render)
+    .map((plugin) => ({ name: plugin.name, ...plugin.visualisation }));
 }
 
 /**
