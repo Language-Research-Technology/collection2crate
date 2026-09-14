@@ -644,12 +644,24 @@ running one corpus through two panels a comparison rather than a coincidence.
 
 `src/github.js` — fetch primitives shared by `main.js` (profile list, template dropdown) and the HTML plugin (template bundles), kept neutral to avoid a circular import. Raw fetches are cache-busted with a timestamp, because `raw.githubusercontent.com` caches per-URL for minutes and can serve a stale profile after a push. Folder listings go through the Contents API, which is rate-limited to 60 unauthenticated requests/hour, so successful listings are cached per `(owner, repo, ref, path)` for the page's lifetime — failures aren't cached, so a rate-limit blip is retried rather than remembered.
 
-`src/ui_helpers.js` — `openModal`, handed to plugins through `deps` so a plugin can ask a question without importing anything from the app. It takes **either** shape:
+`src/ui_helpers.js` — `openModal`, handed to plugins through `deps` so a plugin can ask a question without importing anything from the app. There is **one** shape, used by the app's own dialogs and by plugins alike:
 
-- **declarative** — `{ title, body, actions }`: the helper renders the footer buttons and resolves with the chosen action's `value`. The app's own dialogs use this.
-- **self-built** — `{ title, render(body, close), onDismiss, modalClassName }`: the caller builds the content and its own buttons and calls `close(value)`. Plugins use this (roctable's table config, generic-input's new-files confirmation); the footer is omitted when no `actions` are given.
+```js
+openModal({
+  title,                       // header text
+  body,                        // optional: a Node, or an HTML string
+  onMount(body, { close }),    // optional: build and wire the content
+  actions: [                   // footer buttons, left to right
+    { label: "Cancel", value: null },
+    { label: "Save", primary: true, value: () => working },
+  ],
+  modalClassName,              // optional: extra class on the panel
+});                            // → Promise of the chosen action's value
+```
 
-Both shapes dismiss on ✕, backdrop click and Escape, resolving `onDismiss()` when supplied and `null` otherwise. Plugin-built content uses the host's own class vocabulary — `.button`, `.button primary`, `.checkbox`, `.field-hint`, `.actions`, `.data-table` — so no plugin ships CSS.
+An action's `value` is **called if it is a function**, at click time, so an action can hand back state the content has edited since the modal opened — that is how roctable's Save returns its working config and generic-input's "Add selected" returns the currently ticked paths. Dismissing (✕, backdrop click, Escape) always resolves `null`, which every caller reads as "no choice was made", distinct from an explicit empty result. The footer is omitted when there are no `actions`.
+
+A plugin builds its content in `onMount` and never its own buttons, so every dialog in the app shares one footer, one dismissal rule and one keyboard behaviour. Plugin-built content uses the host's own class vocabulary — `.button`, `.button primary`, `.button subtle`, `.checkbox`, `.field-hint`, `.data-table` — so no plugin ships CSS.
 
 ### 6.3 Entity editing
 
@@ -837,7 +849,7 @@ src/
   github.js                      shared GitHub fetch primitives + listing cache
   preview_assets.js              reference rewriting for the blob-served preview: assets inlined, page links resolved on click
   visualise_data.js              the Visualise page's data: which output folders can be read, and both views of one
-  ui_helpers.js                  modal helper (openModal, both shapes — §6.2)
+  ui_helpers.js                  modal helper (openModal — §6.2)
   style.css                      theme variables + shared UI classes
 
   plugins/
