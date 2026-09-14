@@ -178,6 +178,10 @@ select { max-width: 500px; }
 input[type="date"], input[type="url"], input[type="search"], textarea.mono { font-family: var(--mono); font-size: 13px; }
 textarea { min-height: 92px; resize: vertical; }
 input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; }
+/* A checkbox next to its own label text — used by plugin-built modal UI
+   (roctable's table config, generic-input's new-files tree) as well as
+   the app's own forms, so plugins need no CSS of their own. */
+.checkbox { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
 
 .badge {
   font-size: 12px; border-radius: 999px; padding: 2px 9px;
