@@ -1381,14 +1381,6 @@ $("#open-preview").addEventListener("click", async (event) => {
   });
 });
 
-// postMessage is how the preview asks to navigate; the frame is blob-served,
-// so nothing inside it can reach back into the app any other way.
-window.addEventListener("message", (event) => {
-  if (event.data?.type === "c2c:navigate" && typeof event.data.view === "string") {
-    if (NAV_VIEWS.includes(event.data.view)) showView(event.data.view);
-  }
-});
-
 let jsonGraph = [];
 
 async function renderJsonViewer() {
