@@ -1,0 +1,29 @@
+{
+  "name": "collection2crate",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Turn a folder of files into an RO-Crate, in the browser.",
+  "scripts": {
+    "select-plugins": "node scripts/select-plugins.mjs",
+    "predev": "npm run select-plugins",
+    "dev": "vite",
+    "prebuild": "npm run select-plugins",
+    "build": "vite build",
+    "preview": "vite preview",
+    "pretest": "npm run select-plugins",
+    "test": "node scripts/run-tests.mjs"
+  },
+  "dependencies": {
+    "collection2crate-plugins": "file:../collection2crate-plugins",
+    "exceljs": "^4.4.0",
+    "ro-crate": "^3.7.2",
+    "ro-crate-excel": "^1.2.1",
+    "ro-crate-masp": "git+https://github.com/Language-Research-Technology/ro-crate-masp.git",
+    "ro-crate-static-site": "^0.0.9"
+  },
+  "devDependencies": {
+    "vite": "^7.0.0",
+    "vite-plugin-node-polyfills": "^0.24.0"
+  }
+}

@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Collection2Crate</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>📦</text></svg>" />
+</head>
+<body>
+
+<header class="app-header">
+  <div class="app-header-inner">
+    <div class="app-title">
+      <h1>Collection2Crate</h1>
+      <p class="strapline">
+        Turn a folder into an RO-Crate <span class="version-tag" id="version-tag">v0.1.0</span>
+      </p>
+    </div>
+  </div>
+
+  <nav class="context-bar" id="context-bar" hidden aria-label="Workflow">
+    <span class="folder-path mono" id="context-folder" title="The folder this session is working in"></span>
+    <div class="context-nav" role="group" aria-label="Pages">
+      <button type="button" class="nav-button" data-view="select" aria-current="page">Select</button>
+      <button type="button" class="nav-button" data-view="process" disabled>Process</button>
+      <button type="button" class="nav-button" data-view="build" disabled>Build</button>
+      <button type="button" class="nav-button" data-view="show" disabled>Show</button>
+      <button type="button" class="nav-button" data-view="edit" disabled>Edit</button>
+      <button type="button" class="nav-button" data-view="visualise" disabled>Visualise</button>
+    </div>
+    <button type="button" class="button subtle" id="open-settings">Settings</button>
+  </nav>
+</header>
+
+<main id="main">
+
+  <!-- ------------------------------------------------------------------ -->
+  <section id="view-select" class="view" aria-labelledby="select-heading">
+    <div class="two-col-grid">
+      <div class="col-left">
+        <h2 id="select-heading">Select</h2>
+        <p class="lede">
+          Choose a folder on this computer and the profile that describes what
+          kind of collection it is. Nothing is uploaded — every read and write
+          happens locally.
+        </p>
+
+        <div class="card clickable" id="pick-folder-card" role="button" tabindex="0"
+             aria-describedby="pick-folder-hint">
+          <div class="card-title">1 · Choose a folder</div>
+          <div class="card-body" id="folder-summary">No folder chosen yet.</div>
+          <div class="card-hint" id="pick-folder-hint">
+            Opens your browser's folder picker. Requires Chrome or Edge.
+          </div>
+        </div>
+
+        <div class="card clickable" id="pick-profile-card" role="button" tabindex="0"
+             aria-describedby="pick-profile-hint">
+          <div class="card-title">2 · Choose a MASP profile</div>
+          <div class="card-body" id="profile-summary">
+            schema.org (default) — a minimal, valid crate and a plain preview.
+          </div>
+          <div class="card-hint" id="pick-profile-hint">
+            Optional. A profile decides the Describe fields, the available
+            processing options, the outputs and what counts as valid.
+          </div>
+        </div>
+
+        <div class="card" id="existing-crate-card" hidden>
+          <div class="card-title">Existing crate found</div>
+          <div class="card-body mono" id="existing-crate-summary"></div>
+        </div>
+
+      </div>
+      <div class="col-right">
+        <div class="actions">
+          <button type="button" class="button primary" id="go-to-process" disabled>Continue →</button>
+        </div>
+        <div data-log-slot></div>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------------ -->
+  <section id="view-profile" class="view" aria-labelledby="profile-heading" hidden>
+    <h2 id="profile-heading">Select profile</h2>
+    <p class="lede">
+      Profiles come from the <span class="mono">c2c-masp-profiles</span>
+      repository. Leave this alone to use the bundled schema.org default, which
+      works offline.
+    </p>
+    <label class="field">
+      <span class="field-label">Profile</span>
+      <select id="profile-select">
+        <option value="">schema.org (default, bundled)</option>
+      </select>
+    </label>
+    <p class="field-hint" id="profile-load-status" aria-live="polite"></p>
+    <div class="actions">
+      <button type="button" class="button" data-back-to="select">← Back</button>
+      <button type="button" class="button primary" id="apply-profile">Use this profile</button>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------------ -->
+  <section id="view-process" class="view" aria-labelledby="process-heading" hidden>
+    <div class="two-col-grid">
+      <div class="col-left">
+        <h2 id="process-heading">Process</h2>
+        <p class="lede">
+          Describe the collection, then choose what to run over its files.
+          What is on offer here comes from the active profile.
+        </p>
+
+        <div class="card clickable" id="describe-card" role="button" tabindex="0">
+          <div class="card-title">Describe the collection</div>
+          <div class="card-body" id="describe-summary">Not filled in yet.</div>
+          <div class="card-hint" id="describe-source"></div>
+        </div>
+
+        <h3 class="section-heading">Processing options</h3>
+        <div id="process-options" class="option-list"></div>
+        <p class="empty-note" id="process-options-empty" hidden>
+          This profile offers no optional processing.
+        </p>
+
+      </div>
+      <div class="col-right">
+        <div class="actions">
+          <button type="button" class="button" data-back-to="select">← Back</button>
+          <button type="button" class="button primary" id="run-process">Process files</button>
+          <button type="button" class="button" data-goto="build">Build →</button>
+        </div>
+        <div data-log-slot></div>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------------ -->
+  <section id="view-describe" class="view" aria-labelledby="describe-heading" hidden>
+    <h2 id="describe-heading">Describe</h2>
+    <p class="lede" id="describe-prefill-note"></p>
+    <form id="describe-form" novalidate></form>
+    <div class="actions">
+      <button type="button" class="button" data-back-to="process">← Back</button>
+      <button type="button" class="button primary" id="save-describe">Save description</button>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------------ -->
+  <section id="view-build" class="view" aria-labelledby="build-heading" hidden>
+    <div class="two-col-grid">
+      <div class="col-left">
+        <h2 id="build-heading">Build</h2>
+        <p class="lede">
+          Assemble the in-memory crate, validate it against the profile, and
+          write the output files into the folder.
+        </p>
+
+        <h3 class="section-heading">Output options</h3>
+        <div id="build-options" class="option-list"></div>
+        <p class="empty-note" id="build-options-empty" hidden>
+          This profile offers no build options — JSON output and validation
+          always run.
+        </p>
+
+      </div>
+      <div class="col-right">
+        <div class="actions">
+          <button type="button" class="button" data-back-to="process">← Back</button>
+          <button type="button" class="button primary" id="run-build">Build RO-Crate</button>
+        </div>
+        <p class="field-hint" id="build-needs-process" hidden>
+          Run <strong>Process files</strong> first — the build assembles a crate
+          from what that step prepared.
+        </p>
+
+        <div class="card" id="build-result" hidden>
+          <div class="card-title">Last build</div>
+          <div class="card-body" id="build-result-body"></div>
+        </div>
+
+        <div data-log-slot></div>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------------ -->
+  <section id="view-show" class="view" aria-labelledby="show-heading" hidden>
+    <h2 id="show-heading">Show</h2>
+    <div class="tab-bar" role="tablist" aria-label="Crate views">
+      <button type="button" class="tab" role="tab" data-show-tab="preview" aria-selected="true">HTML preview</button>
+      <button type="button" class="tab" role="tab" data-show-tab="json" aria-selected="false">JSON</button>
+      <button type="button" class="tab" role="tab" data-show-tab="xlsx" aria-selected="false">Spreadsheet</button>
+    </div>
+    <div class="panel" id="show-preview" role="tabpanel">
+      <div class="actions">
+        <button type="button" class="button primary" id="open-preview">Open preview</button>
+        <span class="field-hint" id="preview-status" aria-live="polite"></span>
+      </div>
+      <p class="field-hint">
+        The preview opens in a new browser window, at the width it was designed for.
+      </p>
+    </div>
+    <div class="panel" id="show-json" role="tabpanel" hidden>
+      <div class="actions">
+        <input type="search" id="json-filter" placeholder="Filter entities…" aria-label="Filter JSON entities" />
+      </div>
+      <div class="json-viewer mono" id="json-viewer"></div>
+    </div>
+    <div class="panel" id="show-xlsx" role="tabpanel" hidden>
+      <div class="actions">
+        <select id="xlsx-sheet" aria-label="Worksheet"></select>
+      </div>
+      <div class="table-scroll"><table class="data-table mono" id="xlsx-table"></table></div>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------------ -->
+  <section id="view-edit" class="view" aria-labelledby="edit-heading" hidden>
+    <h2 id="edit-heading">Edit</h2>
+    <div class="two-col-grid edit-grid">
+      <div class="col-left">
+        <div class="edit-filters">
+          <label class="field">
+            <span class="field-label">Type</span>
+            <select id="edit-type-filter"><option value="">All types</option></select>
+          </label>
+          <label class="field">
+            <span class="field-label">Search</span>
+            <input type="search" id="edit-text-filter" placeholder="Any text…" />
+          </label>
+        </div>
+        <ul class="entity-list" id="entity-list" aria-label="Entities"></ul>
+      </div>
+      <div class="col-right">
+        <div id="entity-editor" class="panel">
+          <p class="empty-note">Choose an entity on the left to edit it.</p>
+        </div>
+        <div class="actions">
+          <button type="button" class="button" id="add-entity">Add entity</button>
+          <button type="button" class="button primary" id="save-edits" disabled>Save crate</button>
+          <span class="badge" id="dirty-badge" hidden>Unsaved changes</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------------ -->
+  <section id="view-visualise" class="view" aria-labelledby="visualise-heading" hidden>
+    <h2 id="visualise-heading">Visualise</h2>
+    <div class="two-col-grid vis-grid">
+      <div class="col-left">
+        <h3 class="section-heading">Data</h3>
+        <ul class="entity-list" id="vis-file-list" aria-label="Tabular files"></ul>
+        <label class="field">
+          <span class="field-label">Chart</span>
+          <select id="vis-chart-type">
+            <option value="bar">Bar</option>
+            <option value="line">Line</option>
+            <option value="scatter">Scatter</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">Category / x</span>
+          <select id="vis-x"></select>
+        </label>
+        <label class="field">
+          <span class="field-label">Value / y</span>
+          <select id="vis-y"></select>
+        </label>
+      </div>
+      <div class="col-right">
+        <div class="panel" id="vis-chart" aria-live="polite">
+          <p class="empty-note">Choose a file on the left.</p>
+        </div>
+        <div class="table-scroll"><table class="data-table mono" id="vis-table"></table></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- The one log panel, moved into whichever view has a slot for it. -->
+<div class="log-panel" id="log-panel">
+  <div class="progress-stack">
+    <div class="progress-bar" role="progressbar" aria-label="Build progress"
+         aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="progress-main">
+      <div class="progress-fill" id="progress-main-fill"></div>
+    </div>
+    <div class="progress-bar sub" role="progressbar" aria-label="Current step"
+         aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="progress-sub" hidden>
+      <div class="progress-fill" id="progress-sub-fill"></div>
+    </div>
+  </div>
+
+  <div class="log-head">
+    <span class="log-status" id="log-status" aria-live="polite">Ready.</span>
+    <!-- Clear sits at the far end and the Details/Hide toggle stays put: with
+         the toggle last, expanding the log never leaves Clear under a cursor
+         that is about to click the same spot again. -->
+    <div class="log-actions">
+      <button type="button" class="button subtle" id="log-clear" hidden disabled>Clear</button>
+      <button type="button" class="button subtle" id="log-copy" hidden disabled>Copy</button>
+      <button type="button" class="button subtle" id="log-save" hidden disabled>Save</button>
+      <button type="button" class="button subtle" id="log-toggle" aria-expanded="false"
+              aria-controls="log-body">Details</button>
+    </div>
+  </div>
+  <div class="log-body mono" id="log-body" hidden role="log" aria-label="Build log"></div>
+</div>
+
+<template id="tpl-settings">
+  <div class="settings-body">
+    <h3 class="section-heading">Appearance</h3>
+    <label class="field inline">
+      <input type="checkbox" id="setting-dark" />
+      <span class="field-label">Dark mode</span>
+    </label>
+
+    <h3 class="section-heading">Folder handling</h3>
+    <label class="field">
+      <span class="field-label">Top-level folders become</span>
+      <select id="setting-topLevelFolderType">
+        <option value="object">One RepositoryObject per folder</option>
+        <option value="collection">A RepositoryCollection with child objects</option>
+      </select>
+    </label>
+    <label class="field inline">
+      <input type="checkbox" id="setting-overwrite" />
+      <span class="field-label">Overwrite existing output files</span>
+    </label>
+    <label class="field inline">
+      <input type="checkbox" id="setting-deleteOutputsBeforeBuild" />
+      <span class="field-label">Delete plugin output before rebuilding</span>
+    </label>
+    <p class="field-hint">
+      Deletes every path the active plugins declare as their own output, before
+      a build runs — so output from a renamed or removed source file doesn't
+      linger. <span class="mono">overwrite</span> has no effect while this is on.
+    </p>
+
+    <h3 class="section-heading">Plugin settings</h3>
+    <div id="plugin-settings" class="option-list"></div>
+  </div>
+</template>
+
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
