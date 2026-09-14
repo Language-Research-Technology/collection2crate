@@ -7,14 +7,34 @@
 /**
  * Open a modal.
  *
+ * Two ways to fill it, both supported:
+ *  - declarative: pass `body` plus `actions`, and the helper builds the
+ *    footer buttons and resolves with the chosen action's `value`;
+ *  - self-built: pass `render(body, close)` and build the content and its
+ *    own buttons yourself, calling `close(value)` to resolve. Plugins use
+ *    this shape (roctable's table config, generic-input's new-files
+ *    confirmation), so it must keep working exactly as they call it.
+ *
  * @param {object} args
  * @param {string} args.title
- * @param {Node|string} args.body            content, or HTML string
+ * @param {Node|string} [args.body]          content, or HTML string
  * @param {Array<{label: string, value?: any, primary?: boolean}>} [args.actions]
- * @param {function} [args.onMount]          called with the body element
- * @returns {Promise<any>} the chosen action's value, or null if dismissed
+ * @param {function} [args.onMount]          called with (body, { close })
+ * @param {function} [args.render]           called with (body, close)
+ * @param {function} [args.onDismiss]        what ✕ / backdrop / Escape resolve to
+ * @param {string} [args.modalClassName]     extra class on the panel
+ * @returns {Promise<any>} the chosen value, or onDismiss()'s value (null by
+ *   default) if dismissed
  */
-export function openModal({ title, body, actions = [], onMount = null } = {}) {
+export function openModal({
+  title,
+  body,
+  actions = [],
+  onMount = null,
+  render = null,
+  onDismiss = null,
+  modalClassName = "",
+} = {}) {
   return new Promise((resolve) => {
     const backdrop = document.createElement("div");
     backdrop.className = "modal-backdrop";
@@ -23,7 +43,9 @@ export function openModal({ title, body, actions = [], onMount = null } = {}) {
     backdrop.setAttribute("aria-label", title || "Dialog");
 
     const panel = document.createElement("div");
-    panel.className = "modal-panel";
+    panel.className = modalClassName
+      ? `modal-panel ${modalClassName}`
+      : "modal-panel";
 
     const header = document.createElement("header");
     header.className = "modal-header";
@@ -44,7 +66,8 @@ export function openModal({ title, body, actions = [], onMount = null } = {}) {
     const footer = document.createElement("footer");
     footer.className = "modal-footer";
 
-    panel.append(header, content, footer);
+    panel.append(header, content);
+    if (actions.length) panel.append(footer);
     backdrop.append(panel);
     document.body.append(backdrop);
 
@@ -57,7 +80,10 @@ export function openModal({ title, body, actions = [], onMount = null } = {}) {
       resolve(value);
     }
     function onKeydown(event) {
-      if (event.key === "Escape") close(null);
+      if (event.key === "Escape") dismiss();
+    }
+    function dismiss() {
+      close(typeof onDismiss === "function" ? onDismiss() : null);
     }
 
     for (const action of actions) {
@@ -71,13 +97,14 @@ export function openModal({ title, body, actions = [], onMount = null } = {}) {
       footer.append(button);
     }
 
-    closeButton.addEventListener("click", () => close(null));
+    closeButton.addEventListener("click", dismiss);
     backdrop.addEventListener("mousedown", (event) => {
-      if (event.target === backdrop) close(null);
+      if (event.target === backdrop) dismiss();
     });
     document.addEventListener("keydown", onKeydown, true);
 
     if (typeof onMount === "function") onMount(content, { close });
+    if (typeof render === "function") render(content, close);
     (panel.querySelector("input, select, textarea, button") || closeButton).focus();
   });
 }
