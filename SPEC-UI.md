@@ -2,7 +2,7 @@
 
 The UI is a single static index.html. There is no view framework and no client-side router. Every page is a `<section>` in the same document, switching between them by toggling a hidden class. 
 
-THe UI has a `light` and `dark` mode, toggled from `Settings` and persisted to localStorage; `light` is the default with no attribute present.
+THe UI has a `light` and `dark` mode, toggled from `Settings` and persisted to localStorage; `light` is the default with no attribute present. The stylesheet is linked from `index.html` and the stored theme is applied by a tiny inline script in `<head>`, both before the first paint — styles imported from JS, or a theme applied once the app boots, mean a page of unstyled markup or a white flash ahead of a dark page.
 
 
 ## 2. Colour and typography

@@ -4,6 +4,10 @@
    present; Settings sets data-theme="dark" and persists it. */
 
 :root {
+  /* The browser's own surfaces — scrollbars, form controls, the canvas painted
+     before this sheet's rules apply — follow the theme too, rather than
+     staying light under a dark page. */
+  color-scheme: light;
   --bg: #f6f7f9;
   --panel: #ffffff;
   --panel-2: #eef1f5;
@@ -22,6 +26,7 @@
 }
 
 [data-theme="dark"] {
+  color-scheme: dark;
   --bg: #14171c;
   --panel: #1c2027;
   --panel-2: #242a33;
