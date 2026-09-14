@@ -51,15 +51,7 @@ body {
 }
 
 /* Anything that is data rather than prose gets the monospace stack. */
-.mono, code, pre, input[type="date"], input[type="url"], .data-table, /* Visualisation panels ship their own handful of rules; everything else they
-   use is the shared vocabulary above (SPEC-PLUGINS.md, "Styling"). */
-.kwic-left { text-align: right; }
-.kwic-keyword { font-weight: 600; text-align: center; white-space: nowrap; }
-.ngram-num { text-align: right; font-variant-numeric: tabular-nums; }
-#vis-panel .actions { flex-wrap: wrap; }
-#vis-panel input[type="search"] { min-width: 16em; }
-
-.json-viewer { font-family: var(--mono); }
+.mono, code, pre, input[type="date"], input[type="url"], .data-table, .json-viewer { font-family: var(--mono); }
 
 h1 { font-size: 18px; margin: 0; }
 h2 { font-size: 20px; margin: 0 0 4px; }
@@ -237,6 +229,15 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
   text-align: left; white-space: nowrap; vertical-align: top;
 }
 .data-table th { background: var(--panel-2); position: sticky; top: 0; }
+
+/* The few rules the visualisation panels need beyond the shared vocabulary
+   (SPEC-PLUGINS.md, "Styling"). Written against .data-table so they beat its
+   own text-align rather than losing to it on specificity. */
+.data-table th.kwic-left, .data-table td.kwic-left { text-align: right; }
+.data-table th.kwic-keyword, .data-table td.kwic-keyword { text-align: center; font-weight: 600; }
+.data-table th.ngram-num, .data-table td.ngram-num { text-align: right; font-variant-numeric: tabular-nums; }
+#vis-panel .actions { flex-wrap: wrap; }
+#vis-panel input[type="search"] { min-width: 16em; }
 
 .entity-list { list-style: none; margin: 0 0 12px; padding: 0; max-height: 60vh; overflow: auto;
   border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); }
