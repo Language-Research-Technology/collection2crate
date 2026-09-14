@@ -159,6 +159,18 @@ export function composeSettingsSchema() {
 }
 
 /**
+ * Every plugin's Visualise panel, in plugin order.
+ *
+ * A panel is something a plugin offers, like an option schema — so leaving a
+ * plugin out of the PLUGINS selection takes its panel with it (SPEC.md §6.4).
+ */
+export function composeVisualisationPanels() {
+  return PLUGINS
+    .filter((plugin) => plugin.visualisation?.render)
+    .map((plugin) => ({ name: plugin.name, ...plugin.visualisation }));
+}
+
+/**
  * Every path a plugin may write into the picked folder, deduped by path.
  * Used to exclude a previous build's output from the folder scan, and by the
  * "Delete plugin output before rebuilding" setting.

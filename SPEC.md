@@ -606,6 +606,38 @@ revoked together when the next preview opens.
 
 Saving from the Edit view re-renders through the same functions, reusing `lastHtmlTemplate` from the session's last build so a styled preview isn't silently downgraded to plain (§6.3).
 
+### 6.1b Visualisation panels
+
+The Visualise page is a panel host and nothing else: an output-folder picker
+and the composed panel list on the left, the chosen panel rendered on the
+right. Every panel comes from a plugin — `composeVisualisationPanels()` gathers
+each plugin's `visualisation` member the way `composeOptionSchema()` gathers its
+options, so a deployment that leaves a plugin out of `PLUGINS` loses its panel
+with its taps. The page itself analyses nothing.
+
+A panel is `{ label, hint, render(container, ctx) }` and taps no hook: it never
+runs during a build, only when someone opens it. `render` is handed an empty
+container it owns and `ctx = { documents, tables, log }`. It may be called
+again — on a new folder, or a new panel — so it must not assume it is the
+first call. A panel that throws is caught and reported in its own container
+rather than taking the page down: it is somebody else's plugin.
+
+**The picker offers directories, not files** (`visualise_data.js`). The
+candidates are the plugin-declared `outputPaths` of `kind: "dir"` that exist
+and hold something readable — `_outputs/csv/`, `_outputs/chat/`,
+`_outputs/logs/`. A build writes hundreds of files whose names change each
+time; the handful of folders they land in does not. A declared output holding
+only HTML or images never appears, so no panel has to explain an empty folder
+that could never have held anything.
+
+Choosing one loads it **once, into two views of the same parse**: `documents`,
+one per line, row or utterance (`{ id, source, speaker, text }`), and `tables`,
+header and rows, for panels that read columns. A `.csv`/`.tsv` produces both; a
+`.cha` contributes its utterance tiers only, since its `@` and `%` lines are
+metadata rather than anybody's words; anything else contributes one document
+per non-empty line. Switching panels does not reload — which is what makes
+running one corpus through two panels a comparison rather than a coincidence.
+
 ### 6.2 Shared helpers
 
 `src/fs_helpers.js` — File System Access wrappers: permission checks, existence checks, text and JSON reads, `writeFile`, and `writeFileAtPath` which creates intermediate directories.
@@ -741,6 +773,7 @@ Five suites, run by `npm test`. Every one exits non-zero when the behaviour it c
 | Profile-declared file properties — blank-initialised, duplicate flag only when found and asked for | `test-crate.mjs` | ✅ |
 | `collectTypeCounts` | `test-crate.mjs` | ✅ |
 | All three real outputs (JSON, xlsx, HTML) generate from a built crate; both preview shapes (plain `layouts.default` and a styled `template` + `config.propertyGroups`) render, a multipage-shaped config still renders as one page, and each throws rather than fetching a default layout when its groups are missing | `test-crate.mjs` | ✅ |
+| Visualise data — delimited parsing (quotes, embedded newlines, unnamed columns), documents from tables/CHAT/text, which extensions are offered, one parse feeding both `documents` and `tables`, directories offered only when present and non-empty | `test-visualise-data.mjs` | ✅ |
 | Preview rewriting — relative paths resolved (`.`/`..`, percent-encoding, fragments), assets inlined as blobs, links to other preview pages marked for click-time resolution, the navigation script injected once and only when a page links somewhere | `test-preview-links.mjs` | ✅ |
 | Entity editing — set/delete property, add/rename/delete entity with reference cleanup, structural `@id` stability | `test-edit-crate.mjs` | ✅ |
 | An edited crate still regenerates JSON and xlsx | `test-edit-crate.mjs` | ✅ |
@@ -796,6 +829,7 @@ src/
   fs_helpers.js                  CORE — File System Access API wrappers (browser-only)
   github.js                      shared GitHub fetch primitives + listing cache
   preview_assets.js              reference rewriting for the blob-served preview: assets inlined, page links resolved on click
+  visualise_data.js              the Visualise page's data: which output folders can be read, and both views of one
   ui_helpers.js                  tiny dependency-free modal helper (openModal)
   style.css                      theme variables + shared UI classes
 

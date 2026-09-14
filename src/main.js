@@ -17,7 +17,7 @@ import {
 } from "./crate.js";
 import {
   walkDirectory, verifyPermission, fileExists, statFile, readJsonFromFolder,
-  writeFile, removePath, backupFile, getDirectoryHandleAtPath, getFileHandleAtPath,
+  writeFile, removePath, backupFile, getFileHandleAtPath,
 } from "./fs_helpers.js";
 import { listGitHubFolder } from "./github.js";
 import {
@@ -27,10 +27,12 @@ import {
 import { loadDefaultProfile, DEFAULT_PROFILE_NAME } from "./default_profile.js";
 import { openModal, closeAllModals } from "./ui_helpers.js";
 import { buildPreviewBlobUrl, PAGE_RESOLVER_NAME } from "./preview_assets.js";
+import { loadDirectory, readerFor, scanOutputDirectories } from "./visualise_data.js";
 import { createHookBus, registerAllPlugins, announceAndEmit, HOOKS } from "./plugins/hooks.js";
 import { runPipeline, createProgress, PIPELINE_STAGES } from "./plugins/pipeline.js";
 import {
   PLUGINS, composeOptionSchema, composeSettingsSchema, composeOutputPaths,
+  composeVisualisationPanels,
 } from "./plugins/index.js";
 
 export const APP_VERSION = "0.1.0";
@@ -1893,298 +1895,118 @@ const escapeHtml = (text) =>
   String(text).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 // ---------------------------------------------------------------------------
-// Visualise: pick a table from the output folders and plot it.
-// No hooks run in this mode.
+// Visualise: the panel host (SPEC.md §6.4)
 // ---------------------------------------------------------------------------
+//
+// The page owns two things and no analysis of its own: which output directory
+// is loaded, and which plugin's panel is showing. Everything drawn in the
+// right-hand column comes from a plugin.
 
-let visRows = [];
-let visColumns = [];
-let visFileName = "";
+const PANELS = composeVisualisationPanels();
 
-// The declared output directories are where the tabular plugins write, so
-// that's where to look — plus any CSV/TSV sitting loose in the folder.
-async function findTabularFiles() {
-  const found = [];
-  const directories = [...new Set(
-    OUTPUT_PATHS.filter((entry) => entry.kind === "dir").map((entry) => entry.path)
-  )];
+let visDirectories = [];
+let visData = { documents: [], tables: [] };
+let visPanelName = PANELS[0]?.name || "";
+let visDirectoryPath = "";
 
-  for (const path of directories) {
-    const handle = await getDirectoryHandleAtPath(state.dirHandle, path);
-    if (!handle) continue;
-    for await (const [name, entry] of handle.entries()) {
-      if (entry.kind === "file" && /\.(csv|tsv)$/i.test(name)) found.push({ path: `${path}/${name}`, name });
-    }
-  }
-  for await (const [name, entry] of state.dirHandle.entries()) {
-    if (entry.kind === "file" && /\.(csv|tsv)$/i.test(name)) found.push({ path: name, name });
-  }
-  return found.sort((a, b) => a.path.localeCompare(b.path));
-}
-
-async function refreshVisualiseView() {
-  if (!state.dirHandle) return;
-  const list = $("#vis-file-list");
+function renderPanelList() {
+  const list = $("#vis-panel-list");
   list.replaceChildren();
-  const files = await findTabularFiles();
-  if (!files.length) {
-    list.append(Object.assign(document.createElement("li"), { textContent: "" }));
-    $("#vis-chart").replaceChildren(note(
-      "No CSV or TSV files yet. Turn on a tabular output (for example “Export RO-Crate tables”) and build."
-    ));
+  if (!PANELS.length) {
+    const empty = document.createElement("li");
+    empty.className = "empty-note";
+    empty.textContent = "No visualisation panels in this build — none of the selected plugins offers one.";
+    list.append(empty);
     return;
   }
-  for (const file of files) {
-    const item = document.createElement("li");
+  for (const panel of PANELS) {
     const button = document.createElement("button");
     button.type = "button";
-    button.setAttribute("aria-pressed", String(file.path === visFileName));
+    button.setAttribute("aria-pressed", String(panel.name === visPanelName));
     button.append(
-      Object.assign(document.createElement("span"), { textContent: file.name }),
-      Object.assign(document.createElement("span"), { className: "entity-id", textContent: file.path })
+      Object.assign(document.createElement("span"), { textContent: panel.label }),
+      Object.assign(document.createElement("span"), { className: "entity-id", textContent: panel.hint || "" }),
     );
-    button.addEventListener("click", () => loadTabularFile(file));
+    button.addEventListener("click", () => {
+      visPanelName = panel.name;
+      renderPanelList();
+      // Switching panels never reloads: both see the same corpus, which is
+      // what makes running one through two of them a comparison.
+      renderPanel();
+    });
+    const item = document.createElement("li");
     item.append(button);
     list.append(item);
   }
 }
 
-async function loadTabularFile(file) {
-  const text = await (await (await getFileHandleAtPath(state.dirHandle, file.path)).getFile()).text();
-  const table = parseDelimited(text, file.path.endsWith(".tsv") ? "\t" : ",");
-  visColumns = table.columns;
-  visRows = table.rows;
-  visFileName = file.path;
-
-  for (const [select, preferNumeric] of [[$("#vis-x"), false], [$("#vis-y"), true]]) {
-    select.replaceChildren();
-    for (const column of visColumns) {
-      const option = document.createElement("option");
-      option.value = column;
-      option.textContent = column;
-      select.append(option);
-    }
-    const numeric = visColumns.find((c) => isNumericColumn(c));
-    select.value = preferNumeric && numeric ? numeric : visColumns[0] || "";
-  }
-  await refreshVisualiseView();
-  drawChart();
-  drawVisTable();
-}
-
-for (const id of ["#vis-chart-type", "#vis-x", "#vis-y"]) {
-  $(id).addEventListener("change", drawChart);
-}
-
-/** A small RFC4180-ish reader: quoted fields, embedded separators and newlines. */
-export function parseDelimited(text, separator = ",") {
-  const rows = [];
-  let row = [];
-  let field = "";
-  let quoted = false;
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i];
-    if (quoted) {
-      if (char === '"') {
-        if (text[i + 1] === '"') { field += '"'; i++; }
-        else quoted = false;
-      } else field += char;
-      continue;
-    }
-    if (char === '"') { quoted = true; continue; }
-    if (char === separator) { row.push(field); field = ""; continue; }
-    if (char === "\n") { row.push(field); rows.push(row); row = []; field = ""; continue; }
-    if (char === "\r") continue;
-    field += char;
-  }
-  if (field || row.length) { row.push(field); rows.push(row); }
-
-  const [header = [], ...body] = rows.filter((r) => r.some((cell) => cell !== ""));
-  const columns = header.map((name, index) => name.trim() || `column ${index + 1}`);
-  return {
-    columns,
-    rows: body.map((cells) => Object.fromEntries(columns.map((name, i) => [name, cells[i] ?? ""]))),
-  };
-}
-
-const toNumber = (value) => {
-  const n = Number(String(value).replace(/[, ]/g, ""));
-  return Number.isFinite(n) ? n : null;
-};
-
-function isNumericColumn(column) {
-  const sample = visRows.slice(0, 40).map((row) => toNumber(row[column])).filter((v) => v !== null);
-  return sample.length >= Math.min(5, visRows.length);
-}
-
-function drawVisTable() {
-  const table = $("#vis-table");
-  table.replaceChildren();
-  const head = table.createTHead().insertRow();
-  for (const column of visColumns) {
-    const th = document.createElement("th");
-    th.textContent = column;
-    head.append(th);
-  }
-  const body = table.createTBody();
-  for (const row of visRows.slice(0, 200)) {
-    const tr = body.insertRow();
-    for (const column of visColumns) tr.insertCell().textContent = row[column];
-  }
-}
-
-// One series, one colour (the accent token), hairline recessive axes, and a
-// hover layer — the table above is the chart's WCAG-clean twin, so no value is
-// reachable only through a tooltip.
-function drawChart() {
-  const host = $("#vis-chart");
+function renderPanel() {
+  const host = $("#vis-panel");
   host.replaceChildren();
-  const type = $("#vis-chart-type").value;
-  const xKey = $("#vis-x").value;
-  const yKey = $("#vis-y").value;
-  if (!visRows.length || !xKey || !yKey) { host.append(note("Choose a file on the left.")); return; }
-
-  const points = visRows
-    .map((row) => ({ label: String(row[xKey] ?? ""), value: toNumber(row[yKey]) }))
-    .filter((point) => point.value !== null);
-
-  if (!points.length) {
-    host.append(note(`No numeric values in “${yKey}” — pick another column for the value axis.`));
+  const panel = PANELS.find((entry) => entry.name === visPanelName);
+  if (!panel) {
+    host.append(note("Choose a panel on the left."));
     return;
   }
-  // One number is not a chart.
-  if (points.length === 1) {
-    host.append(statTile(points[0], yKey));
+  try {
+    panel.render(host, { documents: visData.documents, tables: visData.tables, log });
+  } catch (e) {
+    // A panel that throws takes the page down with it otherwise — and the
+    // panel is a plugin, so this is somebody else's bug to see, not to hide.
+    host.replaceChildren(note(`The ${panel.label} panel failed to render: ${e.message}`));
+    log(`Visualise: the ${panel.label} panel threw — ${e.message}`, "err");
+    console.error(e);
+  }
+}
+
+async function loadVisualiseDirectory(path) {
+  const directory = visDirectories.find((entry) => entry.path === path);
+  const status = $("#vis-data-status");
+  if (!directory) {
+    visData = { documents: [], tables: [] };
+    renderPanel();
+    return;
+  }
+  visDirectoryPath = path;
+  status.textContent = `Reading ${directory.count} file(s) from ${path}…`;
+  visData = await loadDirectory(directory.files, readerFor(state.dirHandle), log);
+  status.textContent =
+    `${visData.documents.length} line(s) from ${directory.count} file(s)` +
+    (visData.tables.length ? `, ${visData.tables.length} table(s)` : "");
+  renderPanel();
+}
+
+async function refreshVisualiseView() {
+  if (!state.dirHandle) return;
+  renderPanelList();
+
+  const select = $("#vis-directory");
+  visDirectories = await scanOutputDirectories(state.dirHandle, OUTPUT_PATHS);
+  select.replaceChildren();
+
+  if (!visDirectories.length) {
+    $("#vis-data-status").textContent =
+      "No output folders with readable files yet — process or build first.";
+    select.disabled = true;
+    visData = { documents: [], tables: [] };
+    renderPanel();
     return;
   }
 
-  const width = 720;
-  const plotHeight = 300;
-  const margin = { top: 16, right: 16, bottom: 56, left: 64 };
-  const innerWidth = width - margin.left - margin.right;
-  const innerHeight = plotHeight - margin.top - margin.bottom;
-
-  const values = points.map((p) => p.value);
-  const maxValue = Math.max(...values, 0);
-  const minValue = Math.min(...values, 0);
-  const span = maxValue - minValue || 1;
-  const y = (value) => margin.top + innerHeight - ((value - minValue) / span) * innerHeight;
-
-  const svg = svgElement("svg", {
-    class: "chart-svg",
-    viewBox: `0 0 ${width} ${plotHeight}`,
-    role: "img",
-    "aria-label": `${type} chart of ${yKey} by ${xKey} from ${visFileName}`,
-  });
-
-  // Recessive grid: solid hairlines one shade off the surface, never dashed.
-  const ticks = 4;
-  for (let i = 0; i <= ticks; i++) {
-    const value = minValue + (span * i) / ticks;
-    svg.append(svgElement("line", {
-      x1: margin.left, x2: width - margin.right, y1: y(value), y2: y(value),
-      stroke: "var(--border)", "stroke-width": 1,
+  select.disabled = false;
+  for (const directory of visDirectories) {
+    select.append(Object.assign(document.createElement("option"), {
+      value: directory.path,
+      textContent: `${directory.path} — ${directory.count} file(s)`,
     }));
-    svg.append(text(margin.left - 8, y(value) + 4, formatTick(value), { "text-anchor": "end" }));
   }
-
-  const tooltip = document.createElement("div");
-  tooltip.className = "chart-caption";
-  tooltip.setAttribute("aria-live", "polite");
-  tooltip.textContent = `${points.length} row(s) · hover or focus a mark for its value`;
-
-  const step = innerWidth / points.length;
-  const showLabel = Math.max(1, Math.ceil(points.length / 12));
-
-  if (type === "bar") {
-    const barWidth = Math.max(2, step - 2); // 2px surface gap between bars
-    points.forEach((point, index) => {
-      const x = margin.left + index * step + 1;
-      const top = Math.min(y(point.value), y(0));
-      const height = Math.max(1, Math.abs(y(point.value) - y(0)));
-      const bar = svgElement("rect", {
-        x, y: top, width: barWidth, height, rx: 4, fill: "var(--accent)", tabindex: "0",
-        role: "graphics-symbol", "aria-label": `${point.label}: ${point.value}`,
-      });
-      attachHover(bar, tooltip, point, xKey, yKey);
-      svg.append(bar);
-    });
-  } else {
-    const cx = (index) => margin.left + index * step + step / 2;
-    if (type === "line") {
-      svg.append(svgElement("polyline", {
-        points: points.map((p, i) => `${cx(i)},${y(p.value)}`).join(" "),
-        fill: "none", stroke: "var(--accent)", "stroke-width": 2,
-        "stroke-linejoin": "round", "stroke-linecap": "round",
-      }));
-    }
-    points.forEach((point, index) => {
-      const dot = svgElement("circle", {
-        cx: cx(index), cy: y(point.value), r: 5,
-        fill: "var(--accent)", stroke: "var(--panel)", "stroke-width": 2, tabindex: "0",
-        role: "graphics-symbol", "aria-label": `${point.label}: ${point.value}`,
-      });
-      // The hit area is bigger than the mark, so a 10px dot isn't a pinpoint target.
-      const target = svgElement("circle", {
-        cx: cx(index), cy: y(point.value), r: 12, fill: "transparent",
-      });
-      attachHover(target, tooltip, point, xKey, yKey);
-      attachHover(dot, tooltip, point, xKey, yKey);
-      svg.append(dot, target);
-    });
-  }
-
-  // Selective labels only — a value beside every mark goes unread, and the
-  // table above carries every number anyway.
-  points.forEach((point, index) => {
-    if (index % showLabel) return;
-    const x = margin.left + index * step + step / 2;
-    svg.append(text(x, plotHeight - 32, truncate(point.label, 12), {
-      "text-anchor": "end", transform: `rotate(-35 ${x} ${plotHeight - 32})`,
-    }));
-  });
-  svg.append(text(width / 2, plotHeight - 6, xKey, { "text-anchor": "middle", "font-weight": "600" }));
-
-  const heading = document.createElement("h3");
-  heading.textContent = `${yKey} by ${xKey}`;
-  host.append(heading, svg, tooltip);
+  // Keep the chosen folder across visits when it is still there.
+  const keep = visDirectories.some((entry) => entry.path === visDirectoryPath);
+  select.value = keep ? visDirectoryPath : visDirectories[0].path;
+  await loadVisualiseDirectory(select.value);
 }
 
-function attachHover(node, tooltip, point, xKey, yKey) {
-  const describe = () => { tooltip.textContent = `${xKey}: ${point.label} · ${yKey}: ${point.value}`; };
-  node.addEventListener("mouseenter", describe);
-  node.addEventListener("focus", describe);
-}
-
-function statTile(point, yKey) {
-  const box = document.createElement("div");
-  const figure = document.createElement("p");
-  figure.style.cssText = "font-size:40px;margin:4px 0;font-weight:600;";
-  figure.textContent = String(point.value);
-  const caption = document.createElement("p");
-  caption.className = "chart-caption";
-  caption.textContent = `${yKey} — ${point.label}`;
-  box.append(figure, caption);
-  return box;
-}
-
-function svgElement(name, attributes) {
-  const node = document.createElementNS("http://www.w3.org/2000/svg", name);
-  for (const [key, value] of Object.entries(attributes)) node.setAttribute(key, String(value));
-  return node;
-}
-
-function text(x, y, content, attributes = {}) {
-  const node = svgElement("text", {
-    x, y, fill: "var(--muted)", "font-size": 11, "font-family": "inherit", ...attributes,
-  });
-  node.textContent = content;
-  return node;
-}
-
-const truncate = (value, length) => (value.length > length ? `${value.slice(0, length - 1)}…` : value);
-const formatTick = (value) =>
-  Math.abs(value) >= 1000 ? `${Math.round(value / 100) / 10}k` : String(Math.round(value * 100) / 100);
+$("#vis-directory").addEventListener("change", (event) => loadVisualiseDirectory(event.target.value));
 
 // ---------------------------------------------------------------------------
 // Boot

@@ -51,7 +51,15 @@ body {
 }
 
 /* Anything that is data rather than prose gets the monospace stack. */
-.mono, code, pre, input[type="date"], input[type="url"], .data-table, .json-viewer { font-family: var(--mono); }
+.mono, code, pre, input[type="date"], input[type="url"], .data-table, /* Visualisation panels ship their own handful of rules; everything else they
+   use is the shared vocabulary above (SPEC-PLUGINS.md, "Styling"). */
+.kwic-left { text-align: right; }
+.kwic-keyword { font-weight: 600; text-align: center; white-space: nowrap; }
+.ngram-num { text-align: right; font-variant-numeric: tabular-nums; }
+#vis-panel .actions { flex-wrap: wrap; }
+#vis-panel input[type="search"] { min-width: 16em; }
+
+.json-viewer { font-family: var(--mono); }
 
 h1 { font-size: 18px; margin: 0; }
 h2 { font-size: 20px; margin: 0 0 4px; }
