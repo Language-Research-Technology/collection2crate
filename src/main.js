@@ -4,7 +4,8 @@
 // is architectural: as little logic lives here as possible, which is why
 // plugins own their behaviour and this file mostly assembles ctx.
 
-import "./style.css";
+// Styles are linked from index.html, not imported here — see the comment
+// there: importing them from JS means no styles until the module graph runs.
 
 import { ROCrate } from "ro-crate";
 

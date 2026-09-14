@@ -5,6 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Collection2Crate</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>📦</text></svg>" />
+
+<!-- Linked here rather than imported from main.js, so the styles are in the
+     document before the first paint. Imported from JS they arrive only once
+     the module graph has run, which is a page of unstyled markup in dev.
+     Vite rewrites this to the hashed asset at build time. -->
+<link rel="stylesheet" href="/src/style.css" />
+
+<!-- The theme has to be on <html> before anything paints, or a dark-mode
+     person gets a white page first. main.js owns the setting (SETTINGS_KEY in
+     src/main.js); this only reads it, and stays silent if it can't. -->
+<script>
+  try {
+    const settings = JSON.parse(localStorage.getItem("collection2crate.settings.v1") || "{}");
+    if (settings.themeMode === "dark") document.documentElement.dataset.theme = "dark";
+  } catch { /* private window, blocked storage — light is the default anyway */ }
+</script>
 </head>
 <body>
 
@@ -279,7 +295,7 @@
 </main>
 
 <!-- The one log panel, moved into whichever view has a slot for it. -->
-<div class="log-panel" id="log-panel">
+<div class="log-panel" id="log-panel" hidden>
   <div class="progress-stack">
     <div class="progress-bar" role="progressbar" aria-label="Build progress"
          aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="progress-main">
