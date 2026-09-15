@@ -68,7 +68,7 @@ const OUTPUT_PATHS = composeOutputPaths();
 // shows up next to the other outputs rather than in the middle of processing.
 const PROCESS_OPTION_KEYS = new Set([
   "docxInput", "xlsxCrate", "enableLanguageLookups", "identifyFileFormats",
-  "processTranscriptDocuments", "generateChatFiles", "merge",
+  "processTranscriptDocuments", "generateChatFiles", "transcriptGrammarEdit", "merge",
 ]);
 
 // The same set, plus every child key beneath those options — changing
@@ -1031,7 +1031,10 @@ activateCard("describe-card", () => { renderDescribeForm(); showView("describe")
 function renderProcessOptions() {
   const nodes = PLUGIN_OPTIONS_SCHEMA.filter((node) => PROCESS_OPTION_KEYS.has(node.key));
   const count = renderOptionTree($("#process-options"), nodes, { onChange: onOptionChanged });
-  state.processOptionCount = count;
+  // Only options that change what Process does count towards "Build waits for
+  // Process" — a profile offering nothing here but an action (the transcript
+  // grammar editor) has nothing to process.
+  state.processOptionCount = nodes.filter((node) => node.type !== "action" && isOptionVisible(node.key)).length;
   $("#process-options-empty").hidden = count > 0;
   populateDynamicSelects($("#process-options"));
 }
@@ -1046,7 +1049,9 @@ function renderBuildOptions() {
 function onOptionChanged(node) {
   // Processing options decide what Process does, so changing one invalidates
   // what it left behind — Build closes again until it has been re-run.
-  if (!node || PROCESS_KEYS_DEEP.has(node.key)) {
+  // An action stores no option value, so running one changes nothing Process
+  // reads.
+  if (!node || (node.type !== "action" && PROCESS_KEYS_DEEP.has(node.key))) {
     state.preparedCtx = null;
     refreshNav();
   }

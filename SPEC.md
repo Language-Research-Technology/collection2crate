@@ -257,6 +257,10 @@ processing option — or any option nested under one — discards the prepared r
 and closes Build again, since what it prepared no longer describes what was
 asked for. Changing a *build* option does not: it changes what the build does,
 not what was prepared. A new folder or a different profile discards it too.
+An `action` option (the transcript grammar editor, which sits on Process
+because it is about how files are read) stores no value, so running one
+neither discards the prepared run nor counts as a processing option for this
+gate.
 
 **Clearing stale output follows the writing, not the build.** `main.js` clears
 every declared `outputPaths` entry (when "Delete plugin output before
@@ -696,6 +700,8 @@ A profile's `enabledOptionKeys` (§5.4) names keys from this table. Child keys a
 | `enableRoctable` | `roctable` | Build panel | flatten the crate into one CSV per `@type` |
 | ↳ `roctableConfigure` | `roctable` | Build panel | opens the table picker outside a build; an `action`, so it stores no value |
 | ↳ `roctableConfigUpload` | `roctable` | Build panel | overrides `_config/roctable/config.json` from the folder |
+| `transcriptGrammarEdit` | `transcript-grammar` | Build panel | opens the transcript grammar editor — mark up a sample's regions and rows, save the generated patterns to `_config/transcript-grammar/<name>.json`; an `action` |
+| ↳ `transcriptGrammarTest` | `transcript-grammar` | Build panel | parses another document with a saved grammar; an `action` |
 | `makeXlsx` | `ro-crate-xlsx-output` | Settings modal | write `ro-crate-metadata.xlsx` |
 
 Two kinds of key are deliberately absent from it:
