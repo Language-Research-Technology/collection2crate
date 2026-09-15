@@ -696,6 +696,8 @@ A profile's `enabledOptionKeys` (§5.4) names keys from this table. Child keys a
 | `enableRoctable` | `roctable` | Build panel | flatten the crate into one CSV per `@type` |
 | ↳ `roctableConfigure` | `roctable` | Build panel | opens the table picker outside a build; an `action`, so it stores no value |
 | ↳ `roctableConfigUpload` | `roctable` | Build panel | overrides `_config/roctable/config.json` from the folder |
+| `transcriptGrammarEdit` | `transcript-grammar` | Build panel | opens the transcript grammar editor — mark up a sample's regions and rows, save the generated patterns to `_config/transcript-grammar/<name>.json`; an `action` |
+| ↳ `transcriptGrammarTest` | `transcript-grammar` | Build panel | parses another document with a saved grammar; an `action` |
 | `makeXlsx` | `ro-crate-xlsx-output` | Settings modal | write `ro-crate-metadata.xlsx` |
 
 Two kinds of key are deliberately absent from it:
