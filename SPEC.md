@@ -310,6 +310,8 @@ const PLUGIN_SETTINGS_SCHEMA = [...CORE_SETTINGS_SCHEMA,    ...composeSettingsSc
 
 A plugin's `pluginOptionsSchema` puts it in the Build panel (per-build choices); a `pluginSettingsSchema` puts it in the Settings modal (app preferences). A plugin with neither is always-on. JSON output and validation are both like this.
 
+**A `select` whose choices depend on the folder** declares `choices(ctx)` on its schema node — an async function returning strings or `{ value, label }` — and `populatePluginChoices()` in `main.js` fills it whenever the options are rendered or one changes (so a grammar saved by an action appears straight away). A value already chosen that is no longer offered stays selected, labelled "not found in this folder", rather than the select showing its placeholder while the option still holds the old value. `ca-data-prep`'s `transcriptGrammar` is the first; the two hardcoded dynamic selects (`homePageId`, `templateRepoFolder`) predate it.
+
 A third, optional field composes the same way: `outputPaths`, an array of `{ path, kind }` (`kind` is `"file"` or `"dir"`) declaring every file/directory a plugin may write directly into the picked folder — `ro-crate-json-output` declares `ro-crate-metadata.json`, `ro-crate-html-output` declares both `ro-crate-preview.html` and `ro-crate-preview_html`, `chat-export` and `ca-data-prep` both declare the `c2c-output` directory they share. `main.js` uses the result for two things: excluding those top-level names from `walkDirectory`'s scan (the same job `GENERATED_FILENAMES`/`CONTROL_FILENAMES` do for the core outputs — see §7.1), and the Settings modal's "Delete plugin output before rebuilding" toggle, which deletes every declared path before a build runs. See collection2crate-plugins' README ("Declaring output paths") for the authoring convention. A plugin that only reads the folder, or only mutates `ctx.crate` in memory, declares no `outputPaths` at all — same absence-as-signal convention as `optionSchema`/`settingsSchema`.
 
 ### 4.7 Writing a new plugin
@@ -700,6 +702,7 @@ A profile's `enabledOptionKeys` (§5.4) names keys from this table. Child keys a
 | `enableRoctable` | `roctable` | Build panel | flatten the crate into one CSV per `@type` |
 | ↳ `roctableConfigure` | `roctable` | Build panel | opens the table picker outside a build; an `action`, so it stores no value |
 | ↳ `roctableConfigUpload` | `roctable` | Build panel | overrides `_config/roctable/config.json` from the folder |
+| `transcriptGrammar` | `ca-data-prep` | Build panel | child of `processTranscriptDocuments`: parse with a saved grammar from `_config/transcript-grammar/` instead of the built-in convention; a `select` with folder-dependent `choices` (§4.6). `chat-export` reads the same option. A profile may pre-fill it with a grammar name |
 | `transcriptGrammarEdit` | `transcript-grammar` | Build panel | opens the transcript grammar editor — mark up a sample's regions and rows, save the generated patterns to `_config/transcript-grammar/<name>.json`; an `action` |
 | ↳ `transcriptGrammarTest` | `transcript-grammar` | Build panel | parses another document with a saved grammar; an `action` |
 | `makeXlsx` | `ro-crate-xlsx-output` | Settings modal | write `ro-crate-metadata.xlsx` |

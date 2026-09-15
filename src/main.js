@@ -746,7 +746,49 @@ const appendOption = (select, value) => {
  * is emptied and refilled without an await in between, so two overlapping
  * calls can't interleave into a doubled list.
  */
+// Every option node by key, for the selects whose choices a plugin supplies.
+const OPTION_NODES = (() => {
+  const nodes = new Map();
+  walkOptionSchema(PLUGIN_OPTIONS_SCHEMA, (node) => nodes.set(node.key, node));
+  return nodes;
+})();
+
+// A plugin's select can declare `choices(ctx)` — an async list of values
+// (strings, or { value, label }) that depends on the folder, such as
+// ca-data-prep's saved transcript grammars. A value already chosen that is no
+// longer offered stays selected and says so, rather than silently reverting
+// to the placeholder while the option still holds it.
+async function populatePluginChoices(container) {
+  for (const select of container.querySelectorAll("select[data-option-key]")) {
+    const node = OPTION_NODES.get(select.dataset.optionKey);
+    if (typeof node?.choices !== "function") continue;
+    const placeholder = resetDynamicSelect(select);
+    placeholder.textContent = node.placeholder || "— none —";
+    const current = state.options[node.key] || "";
+    let offered = [];
+    try {
+      offered = (await node.choices(baseCtx(state.generation))) || [];
+    } catch (e) {
+      placeholder.textContent = `${node.placeholder || "— none —"} (choices unavailable: ${e.message})`;
+    }
+    for (const choice of offered) {
+      const option = document.createElement("option");
+      option.value = typeof choice === "string" ? choice : choice.value;
+      option.textContent = typeof choice === "string" ? choice : (choice.label ?? choice.value);
+      select.append(option);
+    }
+    if (current && ![...select.options].some((option) => option.value === current)) {
+      const option = document.createElement("option");
+      option.value = current;
+      option.textContent = `${current} (not found in this folder)`;
+      select.append(option);
+    }
+    select.value = current;
+  }
+}
+
 async function populateDynamicSelects(container) {
+  await populatePluginChoices(container);
   const homePage = container.querySelector('select[data-option-key="homePageId"]');
   if (homePage) {
     resetDynamicSelect(homePage);
