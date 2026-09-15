@@ -257,6 +257,10 @@ processing option — or any option nested under one — discards the prepared r
 and closes Build again, since what it prepared no longer describes what was
 asked for. Changing a *build* option does not: it changes what the build does,
 not what was prepared. A new folder or a different profile discards it too.
+An `action` option (the transcript grammar editor, which sits on Process
+because it is about how files are read) stores no value, so running one
+neither discards the prepared run nor counts as a processing option for this
+gate.
 
 **Clearing stale output follows the writing, not the build.** `main.js` clears
 every declared `outputPaths` entry (when "Delete plugin output before
