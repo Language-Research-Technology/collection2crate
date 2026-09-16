@@ -1,5 +1,8 @@
 import { defineConfig } from "vite";
 import { nodePolyfills } from "vite-plugin-node-polyfills";
+import { existsSync, realpathSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 /**
  * ro-crate-masp's validator doubles as a CLI, and that costs it three things a
@@ -41,11 +44,42 @@ function prepareMaspValidator() {
   };
 }
 
+/**
+ * Reload the page when collection2crate-plugins changes.
+ *
+ * The plugins arrive through a symlink under node_modules (preserveSymlinks
+ * keeps that path), and Vite never watches node_modules — so an edit to a
+ * plugin, or a `git pull` in that checkout, was invisible until the dev
+ * server was restarted. This watches the checkout's own source folders and
+ * drops every cached transform when one of them changes.
+ */
+function watchPluginsCheckout() {
+  const link = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "node_modules/collection2crate-plugins");
+  return {
+    name: "c2c-watch-plugins-checkout",
+    apply: "serve",
+    configureServer(server) {
+      if (!existsSync(link)) return;
+      const root = realpathSync(link);
+      const watched = ["index.js", "plugins", "src"].map((part) => path.join(root, part));
+      server.watcher.add(watched);
+      const reload = (file) => {
+        if (!watched.some((dir) => file === dir || file.startsWith(dir + path.sep))) return;
+        server.moduleGraph.invalidateAll();
+        server.ws.send({ type: "full-reload" });
+        server.config.logger.info(`collection2crate-plugins changed (${path.relative(root, file)}) — reloading`, { timestamp: true });
+      };
+      for (const event of ["change", "add", "unlink"]) server.watcher.on(event, reload);
+    },
+  };
+}
+
 export default defineConfig({
   // So the built site works from any path, including a GitHub Pages subfolder.
   base: "./",
   plugins: [
     prepareMaspValidator(),
+    watchPluginsCheckout(),
     // Buffer/process/global for transitive dependencies (exceljs and friends).
     nodePolyfills({ globals: { Buffer: true, global: true, process: true } }),
   ],
