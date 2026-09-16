@@ -232,6 +232,16 @@ for (const topLevelFolderType of ["object", "collection"]) {
   assert.ok(ids(folderEntity.hasPart).includes("Dyirbal/d.txt"), "…under the folder entity the crate already had");
 }
 
+{
+  const existing = toJson(firstBuild());
+  const edited = structuredClone(existing);
+  edited["@graph"].push({ "@id": "#typed-in", "@type": "Thing" });
+  assert.ok(seedFromExisting({ existingCrate: existing, startingCrate: edited }).getEntity("#typed-in"),
+    "The working crate — unsaved edits included — is the starting point ahead of the folder's file");
+  assert.ok(seedFromExisting({ existingCrate: null, startingCrate: edited }).getEntity("#typed-in"),
+    "…including when the folder has no crate file yet");
+}
+
 /* ---------- the Describe form reaches the seed ---------- */
 
 {
