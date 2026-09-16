@@ -7,8 +7,6 @@
 // Styles are linked from index.html, not imported here — see the comment
 // there: importing them from JS means no styles until the module graph runs.
 
-import { ROCrate } from "ro-crate";
-
 import {
   GENERATED_FILENAMES, CONTROL_FILENAMES, BACKUP_DIR,
   buildFileMetadata, collectTypeCounts, crateToJsonString, crateToXlsxBytes,
@@ -16,7 +14,7 @@ import {
   renameEntityId, deleteEntity, isStructuralEntity, crateToPreviewHtml,
 } from "./crate.js";
 import {
-  walkDirectory, verifyPermission, fileExists, statFile, readJsonFromFolder,
+  walkDirectory, verifyPermission, fileExists, statFile,
   writeFile, removePath, backupFile, getFileHandleAtPath,
 } from "./fs_helpers.js";
 import { listGitHubFolder } from "./github.js";
@@ -27,8 +25,11 @@ import {
 import { loadDefaultProfile, DEFAULT_PROFILE_NAME } from "./default_profile.js";
 import { openModal, closeAllModals } from "./ui_helpers.js";
 import {
-  loadExistingCrate, reconcileFiles, resolveDecisions, withoutIgnored, seedFromExisting, openCrate,
+  loadExistingCrate, reconcileFiles, resolveDecisions, withoutIgnored, seedFromExisting,
 } from "./existing_crate.js";
+import {
+  createWorkingCrate, rootFieldText, rootFormValues, rootPropertiesForFields, applyFieldText,
+} from "./working_crate.js";
 import { openReconcileModal } from "./reconcile_ui.js";
 import { buildPreviewBlobUrl, PAGE_RESOLVER_NAME } from "./preview_assets.js";
 import { loadDirectory, readerFor, scanOutputDirectories } from "./visualise_data.js";
@@ -97,18 +98,19 @@ const state = {
   allFiles: [],
   files: [],
   filesWithMeta: [],
-  // The existing crate is state.crateJson; these say where it came from and
+  // The working crate is state.working; these say where it came from and
   // how the folder lines up with it.
   crateSourceLabel: "",
   reconcile: null,
   fileChoices: { ignore: [], keep: [] },
   profile: null,
-  describeValues: {},
   describeSourceLabel: "",
   options: {},
   settings: {},
   crate: null,
-  crateJson: null,
+  // The working crate (SPEC.md §4.4a): the one crate object Describe, Show
+  // and Edit read and write, saved explicitly or by a build.
+  working: null,
   hasBuilt: false,
   lastHtmlTemplate: null,
   // What Process left behind: the ctx its run finished with, and how many
@@ -120,7 +122,6 @@ const state = {
   // generation counter stops a stale run from touching the log or the UI.
   generation: 0,
   running: false,
-  editDirty: false,
   selectedEntityId: null,
   // Every blob: URL handed to a preview window — the page itself, its assets,
   // and any page opened from it — revoked together when a new preview opens.
@@ -846,6 +847,10 @@ function showView(name) {
   if (slot) slot.append(logPanel);
   logPanel.hidden = !slot;
 
+  if (name === "select" && state.working?.onDisk) {
+    recomputeReconcile();
+    applyFileChoices();
+  }
   if (name === "show") refreshShowView();
   if (name === "edit") refreshEditView();
   if (name === "visualise") refreshVisualiseView();
@@ -864,9 +869,9 @@ function refreshNav() {
     select: true,
     process: ready,
     build: buildable,
-    show: state.hasBuilt,
-    edit: state.hasBuilt,
-    visualise: state.hasBuilt,
+    show: !!state.working?.hasContent,
+    edit: !!state.working,
+    visualise: state.hasBuilt || !!state.working?.onDisk,
   };
   for (const view of NAV_VIEWS) {
     const button = document.querySelector(`.nav-button[data-view="${view}"]`);
@@ -907,6 +912,7 @@ activateCard("pick-profile-card", () => showView("profile"));
 $("#go-to-process").addEventListener("click", () => showView("process"));
 
 async function pickFolder() {
+  if (state.working?.dirty && !(await confirmDiscard("Choosing another folder"))) return;
   if (!window.showDirectoryPicker) {
     log("This browser has no File System Access API — use Chrome or Edge over https or localhost.", "err");
     return;
@@ -928,13 +934,11 @@ async function pickFolder() {
   state.dirHandle = dirHandle;
   state.folderName = dirHandle.name;
   state.crate = null;
-  state.crateJson = null;
+  state.working = null;
   state.crateSourceLabel = "";
   state.reconcile = null;
   state.fileChoices = { ignore: [], keep: [] };
   state.hasBuilt = false;
-  state.describeValues = {};
-  state.editDirty = false;
   closeAllModals();
   state.preparedCtx = null;
   resetActionButtons();
@@ -980,27 +984,23 @@ async function emitFolderPicked() {
   const generation = state.generation;
   const loaded = await loadExistingCrate(state.dirHandle, log);
   if (generation !== state.generation) return;
-  state.crateJson = loaded?.json || null;
+  state.working = createWorkingCrate({ json: loaded?.json || null, onDisk: !!loaded?.json });
   state.crateSourceLabel = loaded?.label || "";
   state.describeSourceLabel = state.crateSourceLabel;
 
-  await announceAndEmit(bus, HOOKS.FOLDER_PICKED, baseCtx(generation, { crate: workingCrate() }));
+  await announceAndEmit(bus, HOOKS.FOLDER_PICKED, baseCtx(generation, { crate: state.working.crate }));
   if (generation !== state.generation) return;
 
-  if (!state.crateJson) {
+  refreshCrateStatus();
+  if (!state.working.onDisk) {
     $("#existing-crate-card").hidden = true;
     return;
   }
-  prefillDescribeFromCrate(state.crateJson);
   $("#existing-crate-card").hidden = false;
   $("#existing-crate-summary").textContent = state.crateSourceLabel;
   log(`Existing crate: ${state.crateSourceLabel}.`, "ok");
 
-  state.reconcile = reconcileFiles(
-    state.crateJson,
-    state.allFiles.map((f) => f.relativePath),
-    { isExcluded: isScanExcluded },
-  );
+  recomputeReconcile();
   const { newFiles, missingFiles } = state.reconcile;
   if (newFiles.length || missingFiles.length) {
     log(`${newFiles.length} new file(s) and ${missingFiles.length} missing file(s) compared with the existing crate.`, "info");
@@ -1040,6 +1040,55 @@ async function reviewFileChanges() {
   applyFileChoices();
 }
 
+// The new/missing sets follow the working crate: a save, a build or an Edit
+// change can move a file in or out of them. A crate that isn't in the folder
+// yet has nothing to reconcile.
+function recomputeReconcile() {
+  state.reconcile = state.working?.onDisk
+    ? reconcileFiles(state.working.toJSON(), state.allFiles.map((f) => f.relativePath), { isExcluded: isScanExcluded })
+    : null;
+}
+
+/** An edit was made to the working crate in place. */
+function markCrateChanged() {
+  state.working?.touch();
+  renderDescribeSummary();
+  refreshCrateStatus();
+}
+
+/** Unsaved-changes badges and Save buttons, wherever they are. */
+function refreshCrateStatus() {
+  const dirty = !!state.working?.dirty;
+  // A new change makes Save a pending action again, not a finished one.
+  if (dirty) for (const id of ["#save-edits", "#context-save"]) $(id).classList.remove("ok", "err");
+  $("#dirty-badge").hidden = !dirty;
+  $("#save-edits").disabled = !dirty;
+  $("#context-dirty").hidden = !dirty;
+  $("#context-save").hidden = !dirty;
+  refreshNav();
+}
+
+/** Ask before throwing unsaved changes away; true to go ahead. */
+async function confirmDiscard(what) {
+  const choice = await openModal({
+    title: "Unsaved changes",
+    body: `<p>The crate has changes that haven't been saved. ${escapeHtml(what)} will discard them.</p>`,
+    actions: [
+      { label: "Keep editing", value: false },
+      { label: "Save first", value: "save" },
+      { label: "Discard changes", primary: true, value: true },
+    ],
+  });
+  if (choice === "save") return saveWorkingCrate(null);
+  return choice === true;
+}
+
+window.addEventListener("beforeunload", (event) => {
+  if (!state.working?.dirty) return;
+  event.preventDefault();
+  event.returnValue = "";
+});
+
 // Decisions apply straight away: ignored files leave the scan result every
 // plugin reads, and the card says what the next build will do.
 function applyFileChoices() {
@@ -1061,24 +1110,6 @@ function applyFileChoices() {
   $("#review-file-changes").hidden = !changes;
   if (changes) log(`File choices: ${parts.join(", ")}.`, "muted");
   refreshNav();
-}
-
-function prefillDescribeFromCrate(crateJson) {
-  const graph = crateJson?.["@graph"] || [];
-  const descriptor = graph.find((e) => e["@id"] === "ro-crate-metadata.json");
-  const rootId = descriptor?.about?.["@id"] || descriptor?.about || "./";
-  const root = graph.find((e) => e["@id"] === rootId);
-  if (!root) return;
-  const values = {};
-  for (const field of state.profile?.describeFields || []) {
-    const raw = root[field.key];
-    if (raw === undefined) continue;
-    const list = (Array.isArray(raw) ? raw : [raw]).map((v) =>
-      v && typeof v === "object" ? v["@id"] || v.name || "" : String(v)
-    );
-    values[field.key] = list.join(", ");
-  }
-  state.describeValues = values;
 }
 
 // ---------------------------------------------------------------------------
@@ -1145,7 +1176,7 @@ function onProfileSelected() {
 /** profile:selected — plugins named by the profile's tool-config are in play. */
 async function afterProfileOrFolderChange() {
   if (!state.profile) return;
-  await announceAndEmit(bus, HOOKS.PROFILE_SELECTED, baseCtx(state.generation, { crate: state.dirHandle ? workingCrate() : null }));
+  await announceAndEmit(bus, HOOKS.PROFILE_SELECTED, baseCtx(state.generation, { crate: state.working?.crate || null }));
   renderProcessOptions();
   renderBuildOptions();
   renderDescribeSummary();
@@ -1195,7 +1226,8 @@ function onOptionChanged(node) {
 
 function renderDescribeSummary() {
   const fields = state.profile?.describeFields || [];
-  const filled = fields.filter((field) => (state.describeValues[field.key] || "").trim()).length;
+  const values = state.working ? rootFormValues(state.working.crate, fields) : {};
+  const filled = fields.filter((field) => values[field.key]).length;
   $("#describe-summary").textContent = fields.length
     ? `${filled} of ${fields.length} field(s) filled in.`
     : "This profile declares no root fields.";
@@ -1206,9 +1238,14 @@ function renderDescribeSummary() {
     : "";
 }
 
+// The form is a view of the working crate's root (SPEC.md §5.3): it opens on
+// the root's current values, and a changed field is written straight back.
+const describeControls = new Map();
+
 function renderDescribeForm() {
   const form = $("#describe-form");
   form.replaceChildren();
+  describeControls.clear();
   const fields = state.profile?.describeFields || [];
   $("#describe-prefill-note").textContent = state.describeSourceLabel
     ? `Prefilled from ${state.describeSourceLabel}.`
@@ -1239,10 +1276,10 @@ function renderDescribeForm() {
 }
 
 function describeControl(field) {
-  const value = state.describeValues[field.key] ?? "";
+  const value = state.working ? rootFieldText(state.working.crate, field) : "";
   const bind = (element) => {
-    element.addEventListener("input", () => { state.describeValues[field.key] = element.value; });
-    element.addEventListener("change", () => { state.describeValues[field.key] = element.value; });
+    describeControls.set(field.key, { field, element });
+    element.addEventListener("change", () => applyDescribeField(field, element.value));
     return element;
   };
 
@@ -1271,51 +1308,46 @@ function describeControl(field) {
   input.type = field.control === "date" ? "date" : field.control === "url" ? "url" : "text";
   // Date inputs default to today, so a person filling the form in gets a
   // sensible datePublished without typing one.
+  // It reaches the crate when the form is saved, not merely by being shown.
   input.value = value || (field.control === "date" ? new Date().toISOString().slice(0, 10) : "");
-  state.describeValues[field.key] = input.value;
   if (field.control === "entity") input.placeholder = `${field.types.join(" / ")} — name or identifier`;
   return bind(input);
 }
 
+/** Write one field to the working crate's root; true if it changed. */
+function applyDescribeField(field, text) {
+  if (!state.working) return false;
+  const changed = applyFieldText(state.working.crate, field, text);
+  if (changed) markCrateChanged();
+  return changed;
+}
+
 $("#save-describe").addEventListener("click", async (event) => {
   await runAction(event.currentTarget, () => {
+    let changed = 0;
+    for (const { field, element } of describeControls.values()) {
+      if (applyDescribeField(field, element.value)) changed++;
+    }
     renderDescribeSummary();
-    log("Description saved for this session.", "ok");
+    log(changed
+      ? `Description applied to the crate (${changed} field(s) changed) — save the crate or build to write it.`
+      : "Description unchanged.", changed ? "ok" : "muted");
   });
   showView("process");
 });
-
-/** Turn the form's flat strings into the root-dataset shape buildCrate wants. */
-function describeValuesToRootProperties() {
-  const out = {};
-  for (const field of state.profile?.describeFields || []) {
-    const raw = String(state.describeValues[field.key] ?? "").trim();
-    if (!raw) continue;
-    // Multi-valued properties take comma-separated input.
-    const parts = field.multiple ? raw.split(",").map((s) => s.trim()).filter(Boolean) : [raw];
-    if (field.control === "entity") {
-      // A class range synthesises a linked entity rather than storing a string.
-      out[field.key] = parts.map((part) => ({
-        "@id": /^(https?:|arcp:|#|\.\/)/.test(part) ? part : `#${slug(part)}`,
-        "@type": field.types[0] || "Thing",
-        name: part,
-      }));
-    } else {
-      out[field.key] = parts;
-    }
-  }
-  return out;
-}
-
-const slug = (text) => text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
 // ---------------------------------------------------------------------------
 // ctx assembly
 // ---------------------------------------------------------------------------
 
 function baseCtx(generation, extra = {}) {
-  const rootProperties = describeValuesToRootProperties();
+  // The Describe fields' values come from the working crate's root, as they
+  // stand — the form writes there, and so does the Edit view.
+  const rootProperties = state.working
+    ? rootPropertiesForFields(state.working.crate, state.profile?.describeFields || [])
+    : {};
   const config = state.profile ? profileToConfig(state.profile, rootProperties) : null;
+  const workingJson = state.working ? state.working.toJSON() : null;
   return {
     // The folder and its files.
     dirHandle: state.dirHandle,
@@ -1327,28 +1359,17 @@ function baseCtx(generation, extra = {}) {
     options: { ...state.options, ...state.settings },
     config,
     selectedProfileData: state.profile,
-    crateJson: state.crateJson,
-    // The folder's existing crate and what to do with its files (SPEC.md §4.4a).
-    existingCrate: state.crateJson,
+    // The crate a run starts from (the working crate, unsaved edits included),
+    // whether the folder has a crate of its own, and what to do with its files
+    // (SPEC.md §4.4a).
+    startingCrate: workingJson,
+    existingCrate: state.working?.onDisk ? workingJson : null,
     crateSourceLabel: state.crateSourceLabel,
     fileDecisions: resolveDecisions(state.reconcile || { newFiles: [], missingFiles: [] }, state.fileChoices),
     lastHtmlTemplate: state.lastHtmlTemplate,
     log: generationLog(generation),
     ...extra,
   };
-}
-
-// The working crate (SPEC.md §4.4a): the folder's crate as it stands — what
-// was loaded, or what the last build or Edit save wrote. Hooks outside a
-// pipeline run (folder:picked, profile:selected) see it as ctx.crate and must
-// treat it as read-only; a run always works on its own copy. Re-opened only
-// when state.crateJson changes.
-let workingCrateCache = { json: undefined, crate: null };
-function workingCrate() {
-  if (workingCrateCache.json !== state.crateJson) {
-    workingCrateCache = { json: state.crateJson, crate: openCrate(state.crateJson) };
-  }
-  return workingCrateCache.crate;
 }
 
 function adoptCtx(ctx, stages) {
@@ -1389,11 +1410,11 @@ async function runStages(stages, { label, reusePrepared = false }) {
   // from it would undo those changes.
   if (!(reusePrepared && state.preparedCtx)) {
     ctx.preparedCrate = null;
-  } else if (ctx.preparedCrate && ctx.preparedFrom !== state.crateJson) {
+  } else if (ctx.preparedCrate && ctx.preparedFrom !== state.working?.token) {
     ctx.preparedCrate = null;
     ctx.log("The crate has changed since Process ran — building from the current crate.", "muted");
   }
-  const startedFrom = state.crateJson;
+  const startedFrom = state.working?.token;
   ctx.progress = createProgress(progressUiFor(generation));
 
   try {
@@ -1463,16 +1484,19 @@ $("#run-build").addEventListener("click", async (event) => {
   ));
   if (!ctx) return;
   state.hasBuilt = true;
-  state.crateJson = ctx.crate ? JSON.parse(crateToJsonString(ctx.crate)) : state.crateJson;
+  // The build wrote the crate, unsaved edits included, so the working crate
+  // is now what the folder holds.
+  if (ctx.crate) state.working.replace(JSON.parse(crateToJsonString(ctx.crate)), { onDisk: true });
   // The crate just written is the existing crate from here on. Choices stand
   // for as long as the folder stays picked, so nothing is asked again.
   if (ctx.crate) {
     state.crateSourceLabel = "ro-crate-metadata.json (this build)";
     $("#existing-crate-card").hidden = false;
     $("#existing-crate-summary").textContent = state.crateSourceLabel;
-    state.reconcile = reconcileFiles(state.crateJson, state.allFiles.map((f) => f.relativePath), { isExcluded: isScanExcluded });
+    recomputeReconcile();
     applyFileChoices();
   }
+  refreshCrateStatus();
   renderBuildResult(ctx);
   refreshNav();
 });
@@ -1514,6 +1538,11 @@ async function refreshShowView() {
   $("#preview-status").textContent = hasPreview
     ? "ro-crate-preview.html is in the folder."
     : "No ro-crate-preview.html — turn on “Generate ro-crate-preview.html” and build.";
+  // The preview and spreadsheet are files; only the JSON tab reads the
+  // working crate, so say when the files are behind it.
+  if (hasPreview && state.working?.dirty) {
+    $("#preview-status").textContent += " It doesn't include unsaved changes — save the crate to update it.";
+  }
   await renderJsonViewer();
   await renderXlsxViewer();
 }
@@ -1568,9 +1597,9 @@ $("#open-preview").addEventListener("click", async (event) => {
 let jsonGraph = [];
 
 async function renderJsonViewer() {
-  const json = state.crateJson || (await readJsonFromFolder(state.dirHandle, "ro-crate-metadata.json"));
+  // The working crate, unsaved edits included.
+  const json = state.working?.hasContent ? state.working.toJSON() : null;
   jsonGraph = json?.["@graph"] || [];
-  state.crateJson = json || state.crateJson;
   drawJson($("#json-filter").value);
 }
 
@@ -1756,27 +1785,22 @@ function bindSetting(element, key) {
 }
 
 // ---------------------------------------------------------------------------
-// Edit: a live ROCrate over the folder's ro-crate-metadata.json (SPEC.md §6.3).
+// Edit: the working crate, edited in place (SPEC.md §6.3), saved explicitly.
 // No hooks run in this mode.
 // ---------------------------------------------------------------------------
 
+// The working crate itself — re-read on every visit, since a build replaces it.
 let editCrate = null;
 
 async function refreshEditView() {
-  if (!state.dirHandle) return;
-  if (!editCrate || !state.editDirty) {
-    const json = await readJsonFromFolder(state.dirHandle, "ro-crate-metadata.json");
-    if (!json) {
-      $("#entity-editor").replaceChildren(note("No ro-crate-metadata.json in this folder — build the crate first."));
-      $("#entity-list").replaceChildren();
-      return;
-    }
-    editCrate = new ROCrate(json, { array: true, link: true });
-    state.editDirty = false;
-  }
+  if (!state.dirHandle || !state.working) return;
+  editCrate = state.working.crate;
+  if (state.selectedEntityId && !editCrate.getEntity(state.selectedEntityId)) state.selectedEntityId = null;
   populateTypeFilter();
   renderEntityList();
-  markDirty(state.editDirty);
+  if (state.selectedEntityId) renderEntityEditor();
+  else $("#entity-editor").replaceChildren(note("Choose an entity on the left to edit it."));
+  refreshCrateStatus();
 }
 
 function note(text) {
@@ -2037,41 +2061,55 @@ $("#add-entity").addEventListener("click", async () => {
 });
 
 function markDirty(dirty) {
-  state.editDirty = dirty;
-  $("#dirty-badge").hidden = !dirty;
-  $("#save-edits").disabled = !dirty;
+  if (dirty) markCrateChanged();
 }
 
 // Saving rewrites the JSON and regenerates the xlsx and HTML if those files
 // already exist, reusing the session's last template so a styled preview isn't
-// silently downgraded to a plain one.
-$("#save-edits").addEventListener("click", async (event) => {
-  armActionButton(event.currentTarget);
-  if (!editCrate) return;
+// silently downgraded to a plain one. The same save serves the Edit view's
+// button and the context bar's.
+async function saveWorkingCrate(button) {
+  if (button) armActionButton(button);
+  if (!state.working || !state.dirHandle) return false;
+  const crate = state.working.crate;
   try {
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
     await backupFile(state.dirHandle, "ro-crate-metadata.json", stamp);
-    await writeFile(state.dirHandle, "ro-crate-metadata.json", crateToJsonString(editCrate));
+    await writeFile(state.dirHandle, "ro-crate-metadata.json", crateToJsonString(crate));
     log("Wrote ro-crate-metadata.json.", "ok");
 
     if (await fileExists(state.dirHandle, "ro-crate-metadata.xlsx")) {
-      await writeFile(state.dirHandle, "ro-crate-metadata.xlsx", await crateToXlsxBytes(editCrate));
+      await backupFile(state.dirHandle, "ro-crate-metadata.xlsx", stamp);
+      await writeFile(state.dirHandle, "ro-crate-metadata.xlsx", await crateToXlsxBytes(crate));
       log("Regenerated ro-crate-metadata.xlsx.", "ok");
     }
     if (await fileExists(state.dirHandle, "ro-crate-preview.html")) {
       const groups = state.lastHtmlTemplate?.propertyGroups || resolvePropertyGroups(state.profile);
       await writeFile(state.dirHandle, "ro-crate-preview.html",
-        await crateToPreviewHtml(editCrate, { layouts: { default: groups } }));
+        await crateToPreviewHtml(crate, { layouts: { default: groups } }));
       log("Regenerated ro-crate-preview.html.", "ok");
     }
-    state.crateJson = JSON.parse(crateToJsonString(editCrate));
-    markDirty(false);
-    event.currentTarget.classList.add("ok");
+    state.working.markSaved();
+    state.hasBuilt = true;
+    if (!state.crateSourceLabel || !state.crateSourceLabel.startsWith("ro-crate-metadata.json")) {
+      state.crateSourceLabel = "ro-crate-metadata.json (saved)";
+      $("#existing-crate-summary").textContent = state.crateSourceLabel;
+    }
+    $("#existing-crate-card").hidden = false;
+    recomputeReconcile();
+    applyFileChoices();
+    refreshCrateStatus();
+    button?.classList.add("ok");
+    return true;
   } catch (e) {
-    event.currentTarget.classList.add("err");
+    button?.classList.add("err");
     log(`Save failed: ${e.message}`, "err");
+    return false;
   }
-});
+}
+
+$("#save-edits").addEventListener("click", (event) => saveWorkingCrate(event.currentTarget));
+$("#context-save").addEventListener("click", (event) => saveWorkingCrate(event.currentTarget));
 
 const escapeHtml = (text) =>
   String(text).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));

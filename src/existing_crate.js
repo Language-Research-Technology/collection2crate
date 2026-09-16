@@ -210,14 +210,15 @@ export function openCrate(json) {
  *
  * A Build that continues a Process run starts from `ctx.preparedCrate`, the
  * snapshot Process finished with; anything else starts from
- * `ctx.existingCrate`, or from an empty crate when the folder has none. The
+ * `ctx.startingCrate` (the working crate, unsaved edits included), then
+ * `ctx.existingCrate`, then an empty crate. The
  * user's removals and the Describe form are applied either way (both are
  * idempotent, so applying them to a Process snapshot again is harmless).
  * A fresh ROCrate every call, so a failed or discarded run never leaves the
  * working crate half-edited.
  */
 export function seedFromExisting(ctx) {
-  const json = ctx?.preparedCrate || ctx?.existingCrate || null;
+  const json = ctx?.preparedCrate || ctx?.startingCrate || ctx?.existingCrate || null;
   const crate = openCrate(json);
   const removed = [];
   for (const id of asArray(ctx.fileDecisions?.remove)) {
@@ -232,7 +233,7 @@ export function seedFromExisting(ctx) {
   if (ctx.config) applyRootDataset(crate, ctx.config);
   if (json) {
     log(
-      `Starting from ${ctx.preparedCrate ? "the crate Process prepared" : "the existing crate"} (${crate.getGraph().length} entities)` +
+      `Starting from ${ctx.preparedCrate ? "the crate Process prepared" : ctx.existingCrate ? "the existing crate" : "the crate as edited"} (${crate.getGraph().length} entities)` +
         (removed.length ? `, ${removed.length} missing file entit${removed.length === 1 ? "y" : "ies"} removed.` : "."),
       "muted"
     );

@@ -352,21 +352,27 @@ because nothing in the crate records the choice.
 **The working crate and the run copy.** There are two crate objects, so a
 Process run can be thrown away without leaving anything behind:
 
-- The **working crate** is opened when the folder is picked — the loaded
-  crate, or an empty one (`openCrate()`) — and is re-opened whenever the
-  folder's crate changes (a build, an Edit save). Hooks outside a pipeline run
+- The **working crate** (`src/working_crate.js`) is opened when the folder is
+  picked — the loaded crate, or an empty one (`openCrate()`) — and is the one
+  crate the UI shows and edits: the Describe form writes its root (§5.3), Edit
+  changes it in place (§6.3), and Show's JSON tab reads it. It tracks whether
+  it has unsaved changes and whether the folder holds a file for it, and
+  carries a token that changes with every edit. A save writes it; a build
+  replaces it with the crate the build wrote. Hooks outside a pipeline run
   (`folder:picked`, `profile:selected`) see it as `ctx.crate` and must treat it
-  as read-only.
+  as read-only. Each run gets it as JSON in `ctx.startingCrate`;
+  `ctx.existingCrate` carries the same JSON only when the folder has a crate
+  file.
 - Each **pipeline run** starts from its own copy, made by
   `seedFromExisting(ctx)` before the first stage: the working crate minus the
   removed entities, with the Describe form's values
   (`ctx.config.rootDataset`) applied over the root. A Build that continues a
   Process run starts instead from `ctx.preparedCrate`, the snapshot Process
   finished with, so whatever a Process tap wrote into the crate reaches the
-  build — as long as the working crate is still the one Process started
-  from. After a build or an Edit save the snapshot is stale, and the next
-  Build starts from the working crate instead, so those changes aren't
-  undone. Changing a processing option, the file choices, the folder or the
+  build — as long as the working crate hasn't changed since Process started
+  (its token still matches). After an edit, a save or a build the snapshot is
+  stale, and Build starts from the working crate instead, so those changes
+  aren't undone. Changing a processing option, the file choices, the folder or the
   profile discards the snapshot along with the rest of the prepared run.
 
 The root entity's values have already reached the Describe form (§5.3), so
@@ -616,7 +622,9 @@ The profile's root class definition is introspected into a field schema and the 
 
 Multi-valued properties take comma-separated input and produce arrays of references. Textarea selection comes from the profile rather than a guess at the property's name — MASP's editor-definition shape has no multiline hint, and the tool has no business inferring one.
 
-**Prefilling.** Fields are pre-filled from the root entity of the existing crate (§4.4a), and the source filename is shown above the form. Edited values replace the existing ones at `crate:prepare`.
+**A view of the working crate's root.** The form opens on the root's current values (§4.4a) — the loaded crate's, or whatever the Edit view has since changed — and names the file they were loaded from. A changed field is written straight back to the root, and so is every field when the form is saved; that marks the crate as having unsaved changes, and it reaches the folder on the next save or build. An emptied field removes the property. An entity field keeps the references whose text is unchanged, links text that names an entity already in the crate, and only mints a new `{@id, @type, name}` entity for new text. A date field shown with today's date as its default reaches the crate only when the form is saved.
+
+`ctx.config.rootDataset` is built from the root's own values for the Describe fields (`rootPropertiesForFields()`), references kept as `@id`s, so nothing is re-synthesised from display text on the way to a build.
 
 **Structural properties are never rendered.** `pcdm:hasMember`, `pcdm:memberOf`, `hasPart` and `isPartOf` are dropped from the field schema even when a profile declares them. A profile is right to require that a collection have members; that requirement is satisfied by the folder scan or by supplied metadata, never by typing. Rendering them does active harm: given a class range they become entity-ref fields, so typing "magpie" mints an empty `RepositoryObject` that then appears in the preview beside the real one.
 
@@ -788,9 +796,9 @@ A plugin builds its content in `onMount` and never its own buttons, so every dia
 
 ### 6.3 Entity editing
 
-The Edit view loads an existing `ro-crate-metadata.json` into a live `ROCrate`: browse and filter entities by type or text, edit values, add and remove values, add and delete entities, rename `@id`s with reference-following, delete with reference cleanup. Structural entities — root, descriptor, `File`/`RepositoryObject`/`RepositoryCollection` — have locked identifiers, since renaming them breaks the crate's relationship to the folder.
+The Edit view works on the working crate itself (§4.4a) — the same object the Describe form and Show read, available as soon as a folder is picked, whether or not the folder has a crate file yet: browse and filter entities by type or text, edit values, add and remove values, add and delete entities, rename `@id`s with reference-following, delete with reference cleanup. Structural entities — root, descriptor, `File`/`RepositoryObject`/`RepositoryCollection` — have locked identifiers, since renaming them breaks the crate's relationship to the folder.
 
-Saving rewrites the JSON and regenerates the xlsx and HTML if those files exist, reusing `lastHtmlTemplate` from the session's last build so a styled preview isn't silently downgraded to plain.
+Changes stay in the working crate until they are saved. **Save crate** — in the Edit view, and in the context bar whenever there are unsaved changes — backs up and rewrites the JSON, and regenerates the xlsx and HTML if those files exist, reusing `lastHtmlTemplate` from the session's last build so a styled preview isn't silently downgraded to plain. A build writes the crate too, unsaved changes included, so it also clears them. Choosing another folder with unsaved changes asks first (keep editing / save first / discard), and so does leaving the page.
 
 ---
 
@@ -921,6 +929,7 @@ Five suites, run by `npm test`. Every one exits non-zero when the behaviour it c
 | Visualise data — delimited parsing (quotes, embedded newlines, unnamed columns), documents from tables/CHAT/text, which extensions are offered, one parse feeding both `documents` and `tables`, directories offered only when present and non-empty | `test-visualise-data.mjs` | ✅ |
 | Preview rewriting — relative paths resolved (`.`/`..`, percent-encoding, fragments), assets inlined as blobs, links to other preview pages marked for click-time resolution, the navigation script injected once and only when a page links somewhere | `test-preview-links.mjs` | ✅ |
 | Entity editing — set/delete property, add/rename/delete entity with reference cleanup, structural `@id` stability | `test-edit-crate.mjs` | ✅ |
+| Working crate — unsaved/saved state, change token, replacement, cached JSON; root values → form text and → config without re-synthesis; form text → root, incl. clearing and entity reuse | `test-working-crate.mjs` | ✅ |
 | Existing crate — newest source with the JSON tie-break, xlsx round-trip and fallback, new/missing sets (encoded, remote and scan-excluded ids), decisions, seeding with removal and form values, an empty crate when there is none, the Process snapshot taking precedence, `buildCrate` adding to a seed without duplicate folder entities or contexts, `mergeCrateInto` | `test-existing-crate.mjs` | ✅ |
 | An edited crate still regenerates JSON and xlsx | `test-edit-crate.mjs` | ✅ |
 | Default profile — loads, carries this app's `buildOptions` overlay, offers nothing beyond `makeHtml` | `test-default-profile.mjs` | ✅ |
@@ -972,6 +981,7 @@ src/
   crate.js                       CORE — crate assembly, serialisation, preview rendering (isomorphic)
   existing_crate.js              CORE — the folder's existing crate: loading, reconciling files, seeding a build (§4.4a)
   reconcile_ui.js                the new/missing files prompt (SPEC-UI.md §7)
+  working_crate.js               CORE — the working crate (dirty/saved/token) and the Describe form's view of its root
   masp.js                        CORE — profile fetch, load, introspection, validation (thin wrapper over ro-crate-maps)
   default_profile.js             the bundled schema.org fallback (§5.1), overlaid with this app's buildOptions
   fs_helpers.js                  CORE — File System Access API wrappers (browser-only)
@@ -993,6 +1003,7 @@ public/
 tests/
   test-hooks.mjs              test-crate.mjs          test-edit-crate.mjs
   test-default-profile.mjs   test-top-level-folders.mjs  test-existing-crate.mjs
+  test-working-crate.mjs
 
 scripts/
   run-tests.mjs                 discovers and runs every tests/test-*.mjs (npm test)

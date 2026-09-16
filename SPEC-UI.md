@@ -20,7 +20,8 @@ Every screen sits under a fixed two-part header:
 
 - **Header** — app name, a one-line strapline with the tool name and a version tag.
 
-- **Context bar** — appears once a folder is chosen; shows the active folder path plus page-switch buttons (Select, Process, Build, Show, Edit, Visualise) and a Settings button. These buttons enable/disable based on what currently exists in the folder (e.g. "Show" and "Edit" are disabled until a crate has been built).
+- **Context bar** — appears once a folder is chosen; shows the active folder path plus page-switch buttons (Select, Process, Build, Show, Edit, Visualise) and a Settings button. These buttons enable/disable based on what currently exists: Edit is available as soon as a folder is picked, Show once there is a crate to show (a crate file in the folder, or unsaved edits), Visualise once the folder has a crate file.
+  - When the working crate has unsaved changes, an amber **Unsaved changes** badge and a **Save crate** button appear before Settings. Saving writes the crate and hides both again (SPEC.md §6.3).
 
 Below that, a single `<main>` holds all views as sibling `<section>` elements, mutually exclusive via `hidden`.
 
@@ -41,7 +42,7 @@ Anything optional (build options, settings) defaults to a collapsed, scannable s
 
 Choosing a new folder mid-build resets the UI defensively (buttons and progress bar return to idle) even though it does not abort in-flight plugin work — a generation counter on the controller side simply stops that stale run from touching the log or UI further.
 
-The HTML preview opens in a new browser window rather than an embedded frame: a crate preview is a full page in its own right, meant to be read at the width it was designed for. The Show page's HTML tab holds the button and a status line; JSON and Spreadsheet render in-page. The window is opened synchronously on the click, before the file is read, or the browser's pop-up blocker takes it — when it is blocked anyway, the status line says so and how to fix it.
+Show's JSON tab reads the working crate, unsaved changes included; the HTML preview and Spreadsheet tabs show the files in the folder, and the preview status says when those are behind unsaved changes. The HTML preview opens in a new browser window rather than an embedded frame: a crate preview is a full page in its own right, meant to be read at the width it was designed for. The Show page's HTML tab holds the button and a status line; JSON and Spreadsheet render in-page. The window is opened synchronously on the click, before the file is read, or the browser's pop-up blocker takes it — when it is blocked anyway, the status line says so and how to fix it.
 
 Accessibility affordances present throughout: `aria-live` regions on status text and logs, `aria-expanded` on disclosure toggles, `role="progressbar"` with `aria-valuemin`/`max`/`now` on every progress bar, and `role="button"`/`tabindex` on the non-`<button>` clickable cards.
 
