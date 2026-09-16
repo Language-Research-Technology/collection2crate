@@ -289,7 +289,11 @@ metadata the folder scan produced when the folder was picked. Changing a
 processing option — or any option nested under one — discards the prepared run
 and closes Build again, since what it prepared no longer describes what was
 asked for. Changing a *build* option does not: it changes what the build does,
-not what was prepared. A new folder or a different profile discards it too.
+not what was prepared. A child option marked `stage: "build"` counts as a build
+option even though it sits under a processing one — `ca-data-prep`'s and
+`chat-export`'s choice of whether their generated files are described in the
+crate is only read at `crate:build`. A new folder or a different profile
+discards the prepared run too.
 An `action` option (the transcript grammar editor, which sits on Process
 because it is about how files are read) stores no value, so running one
 neither discards the prepared run nor counts as a processing option for this
@@ -439,6 +443,8 @@ const PLUGIN_SETTINGS_SCHEMA = [...CORE_SETTINGS_SCHEMA,    ...composeSettingsSc
 ```
 
 A plugin's `pluginOptionsSchema` puts it in the Build panel (per-build choices); a `pluginSettingsSchema` puts it in the Settings modal (app preferences). A plugin with neither is always-on. JSON output and validation are both like this.
+
+**A child option that only affects Build** sits with its plugin's option, so it renders on Process, but declares `stage: "build"` so changing it doesn't discard the prepared run (§4.4).
 
 **A `select` whose choices depend on the folder** declares `choices(ctx)` on its schema node — an async function returning strings or `{ value, label }` — and `populatePluginChoices()` in `main.js` fills it whenever the options are rendered or one changes (so a grammar saved by an action appears straight away). A value already chosen that is no longer offered stays selected, labelled "not found in this folder", rather than the select showing its placeholder while the option still holds the old value. `ca-data-prep`'s `transcriptGrammar` is the first; the two hardcoded dynamic selects (`homePageId`, `templateRepoFolder`) predate it.
 

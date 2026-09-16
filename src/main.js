@@ -79,10 +79,13 @@ const PROCESS_OPTION_KEYS = new Set([
 // The same set, plus every child key beneath those options — changing
 // "Match Austlang alternate names" changes what Process does just as much as
 // switching AUSTLANG on does, so both have to invalidate a prepared run.
+// A child marked `stage: "build"` is the exception: it sits with its plugin's
+// option but only changes what a build does (ca-data-prep's "CSV files in the
+// RO-Crate"), so Process has nothing to redo.
 const PROCESS_KEYS_DEEP = (() => {
   const keys = new Set();
   const roots = PLUGIN_OPTIONS_SCHEMA.filter((node) => PROCESS_OPTION_KEYS.has(node.key));
-  walkOptionSchema(roots, (node) => keys.add(node.key));
+  walkOptionSchema(roots, (node) => { if (node.stage !== "build") keys.add(node.key); });
   return keys;
 })();
 
