@@ -8,7 +8,7 @@
 // selection can't switch it off.
 
 import { ROCrate } from "ro-crate";
-import { deleteEntity, applyRootDataset } from "./crate.js";
+import { deleteEntity, applyRootDataset, CRATE_CONTEXT } from "./crate.js";
 import { statFile } from "./fs_helpers.js";
 
 // The core's two outputs, in tie-break order: the build writes both in the
@@ -192,15 +192,33 @@ export function withoutIgnored(files, ignore) {
 // ---------------------------------------------------------------------------
 
 /**
- * The crate a build starts from: `ctx.existingCrate` minus the entities the
- * user chose to remove, or null when the folder has no crate. A fresh
- * ROCrate every call, so a failed build never leaves the loaded JSON
- * half-edited.
+ * A live crate for some crate JSON — or an empty one, with this tool's
+ * context, when there is none. A fresh object every call: the JSON is cloned,
+ * so nothing done to the crate reaches whatever the JSON came from.
+ */
+export function openCrate(json) {
+  if (!json) {
+    const crate = new ROCrate({ array: true, link: true });
+    crate.addContext(CRATE_CONTEXT);
+    return crate;
+  }
+  return new ROCrate(structuredClone(json), { array: true, link: true });
+}
+
+/**
+ * The crate a pipeline run starts from (SPEC.md §4.4a).
+ *
+ * A Build that continues a Process run starts from `ctx.preparedCrate`, the
+ * snapshot Process finished with; anything else starts from
+ * `ctx.existingCrate`, or from an empty crate when the folder has none. The
+ * user's removals and the Describe form are applied either way (both are
+ * idempotent, so applying them to a Process snapshot again is harmless).
+ * A fresh ROCrate every call, so a failed or discarded run never leaves the
+ * working crate half-edited.
  */
 export function seedFromExisting(ctx) {
-  const json = ctx?.existingCrate;
-  if (!json) return null;
-  const crate = new ROCrate(structuredClone(json), { array: true, link: true });
+  const json = ctx?.preparedCrate || ctx?.existingCrate || null;
+  const crate = openCrate(json);
   const removed = [];
   for (const id of asArray(ctx.fileDecisions?.remove)) {
     if (!crate.getEntity(id)) continue;
@@ -212,11 +230,13 @@ export function seedFromExisting(ctx) {
   // user left it as, so its values replace the root's — whichever builder
   // runs next.
   if (ctx.config) applyRootDataset(crate, ctx.config);
-  log(
-    `Starting from the existing crate (${crate.getGraph().length} entities)` +
-      (removed.length ? `, ${removed.length} missing file entit${removed.length === 1 ? "y" : "ies"} removed.` : "."),
-    "muted"
-  );
+  if (json) {
+    log(
+      `Starting from ${ctx.preparedCrate ? "the crate Process prepared" : "the existing crate"} (${crate.getGraph().length} entities)` +
+        (removed.length ? `, ${removed.length} missing file entit${removed.length === 1 ? "y" : "ies"} removed.` : "."),
+      "muted"
+    );
+  }
   const kept = asArray(ctx.fileDecisions?.keep);
   if (kept.length) {
     log(`Keeping ${kept.length} file entit${kept.length === 1 ? "y" : "ies"} with no file in the folder: ${kept.join(", ")}`, "warn");

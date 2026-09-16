@@ -343,6 +343,39 @@ const builderPlugin = (name, { priority, activeWhen = null, order }) => ({
 /* ---------- building on an existing crate (SPEC.md §4.4a) ---------- */
 
 {
+  // The crate exists from the first stage of a run, not just from crate:build.
+  const seed = { getGraph: () => [] };
+  const seen = [];
+  const bus = createHookBus();
+  registerAllPlugins(bus, [
+    { name: "early", hooks: {
+      "files:prepare": { priority: 10, handler: (ctx) => seen.push(["files:prepare", ctx.crate]) },
+      "metadata:merge": { priority: 10, handler: (ctx) => seen.push(["metadata:merge", ctx.crate]) },
+    } },
+    { name: "builder", hooks: { "crate:build": { priority: 10, handler: () => {} } } },
+  ]);
+  const ctx = collectingCtx({ crate: { stale: true } });
+  let calls = 0;
+  await runPipeline(ctx, { bus, seedCrate: () => { calls++; return seed; } });
+  assert.equal(calls, 1, "The crate is seeded once per run, before the first stage");
+  assert.deepEqual(seen, [["files:prepare", seed], ["metadata:merge", seed]],
+    "Process-stage taps already see the run's crate — and never a stale one left on a carried ctx");
+}
+
+{
+  const bus = createHookBus();
+  registerAllPlugins(bus, [
+    { name: "early-replacer", hooks: { "files:prepare": { priority: 10, handler: (ctx) => { ctx.crate = { getGraph: () => [] }; } } } },
+    { name: "builder", hooks: { "crate:build": { priority: 10, handler: () => {} } } },
+  ]);
+  await assert.rejects(
+    () => runPipeline(collectingCtx(), { bus, seedCrate: () => ({ getGraph: () => [] }) }),
+    /replaced the existing crate/,
+    "Swapping out the run's crate before crate:build is caught too"
+  );
+}
+
+{
   const existing = { getGraph: () => [{ "@type": "Dataset" }, { "@type": "File" }] };
   const bus = createHookBus();
   registerAllPlugins(bus, [

@@ -27,7 +27,7 @@ import {
 import { loadDefaultProfile, DEFAULT_PROFILE_NAME } from "./default_profile.js";
 import { openModal, closeAllModals } from "./ui_helpers.js";
 import {
-  loadExistingCrate, reconcileFiles, resolveDecisions, withoutIgnored, seedFromExisting,
+  loadExistingCrate, reconcileFiles, resolveDecisions, withoutIgnored, seedFromExisting, openCrate,
 } from "./existing_crate.js";
 import { openReconcileModal } from "./reconcile_ui.js";
 import { buildPreviewBlobUrl, PAGE_RESOLVER_NAME } from "./preview_assets.js";
@@ -984,7 +984,7 @@ async function emitFolderPicked() {
   state.crateSourceLabel = loaded?.label || "";
   state.describeSourceLabel = state.crateSourceLabel;
 
-  await announceAndEmit(bus, HOOKS.FOLDER_PICKED, baseCtx(generation));
+  await announceAndEmit(bus, HOOKS.FOLDER_PICKED, baseCtx(generation, { crate: workingCrate() }));
   if (generation !== state.generation) return;
 
   if (!state.crateJson) {
@@ -1145,7 +1145,7 @@ function onProfileSelected() {
 /** profile:selected — plugins named by the profile's tool-config are in play. */
 async function afterProfileOrFolderChange() {
   if (!state.profile) return;
-  await announceAndEmit(bus, HOOKS.PROFILE_SELECTED, baseCtx(state.generation));
+  await announceAndEmit(bus, HOOKS.PROFILE_SELECTED, baseCtx(state.generation, { crate: state.dirHandle ? workingCrate() : null }));
   renderProcessOptions();
   renderBuildOptions();
   renderDescribeSummary();
@@ -1338,9 +1338,24 @@ function baseCtx(generation, extra = {}) {
   };
 }
 
-function adoptCtx(ctx) {
+// The working crate (SPEC.md §4.4a): the folder's crate as it stands — what
+// was loaded, or what the last build or Edit save wrote. Hooks outside a
+// pipeline run (folder:picked, profile:selected) see it as ctx.crate and must
+// treat it as read-only; a run always works on its own copy. Re-opened only
+// when state.crateJson changes.
+let workingCrateCache = { json: undefined, crate: null };
+function workingCrate() {
+  if (workingCrateCache.json !== state.crateJson) {
+    workingCrateCache = { json: state.crateJson, crate: openCrate(state.crateJson) };
+  }
+  return workingCrateCache.crate;
+}
+
+function adoptCtx(ctx, stages) {
   state.filesWithMeta = ctx.filesWithMeta || state.filesWithMeta;
-  state.crate = ctx.crate || state.crate;
+  // Only a build's crate is a result; a Process run's copy is a work in
+  // progress that Build picks up from ctx.preparedCrate.
+  if (stages.includes(HOOKS.CRATE_BUILD)) state.crate = ctx.crate || state.crate;
   if (ctx.lastHtmlTemplate) state.lastHtmlTemplate = ctx.lastHtmlTemplate;
 }
 
@@ -1367,6 +1382,18 @@ async function runStages(stages, { label, reusePrepared = false }) {
   const ctx = reusePrepared && state.preparedCtx
     ? Object.assign(state.preparedCtx, fresh)
     : fresh;
+  // A Build continuing a Process run starts from the crate Process finished
+  // with; any other run starts from the working crate (seedFromExisting).
+  // The snapshot only stands while the working crate is the one Process
+  // started from — after a build or an Edit save it is stale, and building
+  // from it would undo those changes.
+  if (!(reusePrepared && state.preparedCtx)) {
+    ctx.preparedCrate = null;
+  } else if (ctx.preparedCrate && ctx.preparedFrom !== state.crateJson) {
+    ctx.preparedCrate = null;
+    ctx.log("The crate has changed since Process ran — building from the current crate.", "muted");
+  }
+  const startedFrom = state.crateJson;
   ctx.progress = createProgress(progressUiFor(generation));
 
   try {
@@ -1380,7 +1407,12 @@ async function runStages(stages, { label, reusePrepared = false }) {
     log(`${label}…`, "info");
     await runPipeline(ctx, { bus, stages, collectTypeCounts, seedCrate: seedFromExisting });
     if (generation !== state.generation) return null;
-    adoptCtx(ctx);
+    adoptCtx(ctx, stages);
+    // Process leaves a snapshot of its crate for Build to start from.
+    if (!stages.includes(HOOKS.CRATE_BUILD) && ctx.crate) {
+      ctx.preparedCrate = JSON.parse(JSON.stringify(ctx.crate.toJSON()));
+      ctx.preparedFrom = startedFrom;
+    }
     log(`${label} finished.`, "ok");
     return ctx;
   } catch (error) {
