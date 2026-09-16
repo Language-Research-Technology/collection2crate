@@ -26,6 +26,10 @@ import {
 } from "./masp.js";
 import { loadDefaultProfile, DEFAULT_PROFILE_NAME } from "./default_profile.js";
 import { openModal, closeAllModals } from "./ui_helpers.js";
+import {
+  loadExistingCrate, reconcileFiles, resolveDecisions, withoutIgnored, seedFromExisting,
+} from "./existing_crate.js";
+import { openReconcileModal } from "./reconcile_ui.js";
 import { buildPreviewBlobUrl, PAGE_RESOLVER_NAME } from "./preview_assets.js";
 import { loadDirectory, readerFor, scanOutputDirectories } from "./visualise_data.js";
 import { createHookBus, registerAllPlugins, announceAndEmit, HOOKS } from "./plugins/hooks.js";
@@ -88,8 +92,16 @@ const PROCESS_KEYS_DEEP = (() => {
 const state = {
   dirHandle: null,
   folderName: "",
+  // Everything the scan found, and the subset a build sees once the user's
+  // ignored new files are taken out (SPEC.md §4.4a).
+  allFiles: [],
   files: [],
   filesWithMeta: [],
+  // The existing crate is state.crateJson; these say where it came from and
+  // how the folder lines up with it.
+  crateSourceLabel: "",
+  reconcile: null,
+  fileChoices: { ignore: [], keep: [] },
   profile: null,
   describeValues: {},
   describeSourceLabel: "",
@@ -917,6 +929,9 @@ async function pickFolder() {
   state.folderName = dirHandle.name;
   state.crate = null;
   state.crateJson = null;
+  state.crateSourceLabel = "";
+  state.reconcile = null;
+  state.fileChoices = { ignore: [], keep: [] };
   state.hasBuilt = false;
   state.describeValues = {};
   state.editDirty = false;
@@ -944,35 +959,108 @@ function scanExclusions() {
 
 async function scanFolder() {
   log("Scanning folder…", "muted");
-  state.files = await walkDirectory(state.dirHandle, {
+  state.allFiles = await walkDirectory(state.dirHandle, {
     excludeTopLevel: scanExclusions(),
     onProgress: (count) => { logStatus.textContent = `Scanning… ${count} file(s)`; },
   });
+  state.files = state.allFiles;
   state.filesWithMeta = buildFileMetadata(state.files);
   $("#folder-summary").textContent =
-    `${state.folderName} — ${state.files.length} file(s) in ${topLevelFolderNames().length} top-level folder(s).`;
-  log(`Found ${state.files.length} file(s).`, "ok");
+    `${state.folderName} — ${state.allFiles.length} file(s) in ${topLevelFolderNames().length} top-level folder(s).`;
+  log(`Found ${state.allFiles.length} file(s).`, "ok");
 
   state.hasBuilt = await fileExists(state.dirHandle, "ro-crate-metadata.json");
   refreshNav();
 }
 
-// folder:picked is where a plugin offers prefill data from whatever crate
-// metadata the folder already holds — which sources count as "existing crate
-// metadata" is the plugin's call, not this app's.
+// The existing crate is the core's to load (SPEC.md §4.4a): whichever of the
+// two outputs is newer, JSON on a tie. It is loaded before folder:picked, so
+// every tap on that hook already sees it on ctx.
 async function emitFolderPicked() {
-  const ctx = baseCtx(state.generation);
-  await announceAndEmit(bus, HOOKS.FOLDER_PICKED, ctx);
-  if (ctx.crateJson) {
-    state.crateJson = ctx.crateJson;
-    state.describeSourceLabel = ctx.crateSourceLabel || "";
-    prefillDescribeFromCrate(ctx.crateJson);
-    $("#existing-crate-card").hidden = false;
-    $("#existing-crate-summary").textContent = ctx.crateSourceLabel || "an existing crate";
-    log(`Existing crate metadata: ${ctx.crateSourceLabel || "found"}.`, "ok");
-  } else {
+  const generation = state.generation;
+  const loaded = await loadExistingCrate(state.dirHandle, log);
+  if (generation !== state.generation) return;
+  state.crateJson = loaded?.json || null;
+  state.crateSourceLabel = loaded?.label || "";
+  state.describeSourceLabel = state.crateSourceLabel;
+
+  await announceAndEmit(bus, HOOKS.FOLDER_PICKED, baseCtx(generation));
+  if (generation !== state.generation) return;
+
+  if (!state.crateJson) {
     $("#existing-crate-card").hidden = true;
+    return;
   }
+  prefillDescribeFromCrate(state.crateJson);
+  $("#existing-crate-card").hidden = false;
+  $("#existing-crate-summary").textContent = state.crateSourceLabel;
+  log(`Existing crate: ${state.crateSourceLabel}.`, "ok");
+
+  state.reconcile = reconcileFiles(
+    state.crateJson,
+    state.allFiles.map((f) => f.relativePath),
+    { isExcluded: isScanExcluded },
+  );
+  const { newFiles, missingFiles } = state.reconcile;
+  if (newFiles.length || missingFiles.length) {
+    log(`${newFiles.length} new file(s) and ${missingFiles.length} missing file(s) compared with the existing crate.`, "info");
+    await reviewFileChanges();
+  } else {
+    applyFileChoices();
+  }
+}
+
+// A path the scan skips on purpose — the core's outputs and every declared
+// plugin output — is never "missing": the scan was never going to find it.
+function isScanExcluded(path) {
+  return scanExclusions().has(String(path).split("/")[0]);
+}
+
+/** The reconcile prompt; also reopened from the existing-crate card. */
+async function reviewFileChanges() {
+  if (!state.reconcile) return;
+  const generation = state.generation;
+  const chosen = await openReconcileModal({
+    result: state.reconcile,
+    choices: state.fileChoices,
+    sourceLabel: state.crateSourceLabel || "the existing crate",
+    openModal,
+  });
+  if (generation !== state.generation) return;
+  if (chosen) {
+    const before = JSON.stringify(resolveDecisions(state.reconcile, state.fileChoices));
+    state.fileChoices = chosen;
+    // Ignoring or adding a file changes what Process reads, so what it
+    // prepared no longer describes the folder the build will see.
+    if (JSON.stringify(resolveDecisions(state.reconcile, chosen)) !== before && state.preparedCtx) {
+      state.preparedCtx = null;
+      log("File choices changed — run Process again before building.", "warn");
+    }
+  }
+  applyFileChoices();
+}
+
+// Decisions apply straight away: ignored files leave the scan result every
+// plugin reads, and the card says what the next build will do.
+function applyFileChoices() {
+  const result = state.reconcile || { newFiles: [], missingFiles: [] };
+  const decisions = resolveDecisions(result, state.fileChoices);
+  state.files = withoutIgnored(state.allFiles, decisions.ignore);
+  state.filesWithMeta = buildFileMetadata(state.files);
+
+  const parts = [];
+  const added = result.newFiles.length - decisions.ignore.length;
+  if (added) parts.push(`${added} new file(s) added`);
+  if (decisions.ignore.length) parts.push(`${decisions.ignore.length} ignored`);
+  if (decisions.remove.length) parts.push(`${decisions.remove.length} missing entit${decisions.remove.length === 1 ? "y" : "ies"} removed`);
+  if (decisions.keep.length) parts.push(`${decisions.keep.length} kept with no file`);
+  const changes = result.newFiles.length + result.missingFiles.length;
+  $("#existing-crate-changes").textContent = changes
+    ? `Next build: ${parts.join(", ")}.`
+    : "The folder matches the crate's files.";
+  $("#review-file-changes").hidden = !changes;
+  if (changes) log(`File choices: ${parts.join(", ")}.`, "muted");
+  refreshNav();
 }
 
 function prefillDescribeFromCrate(crateJson) {
@@ -1067,6 +1155,8 @@ async function afterProfileOrFolderChange() {
 // ---------------------------------------------------------------------------
 // Process: Describe, then the options that act on files
 // ---------------------------------------------------------------------------
+
+$("#review-file-changes").addEventListener("click", () => reviewFileChanges());
 
 activateCard("describe-card", () => { renderDescribeForm(); showView("describe"); });
 
@@ -1238,6 +1328,10 @@ function baseCtx(generation, extra = {}) {
     config,
     selectedProfileData: state.profile,
     crateJson: state.crateJson,
+    // The folder's existing crate and what to do with its files (SPEC.md §4.4a).
+    existingCrate: state.crateJson,
+    crateSourceLabel: state.crateSourceLabel,
+    fileDecisions: resolveDecisions(state.reconcile || { newFiles: [], missingFiles: [] }, state.fileChoices),
     lastHtmlTemplate: state.lastHtmlTemplate,
     log: generationLog(generation),
     ...extra,
@@ -1284,7 +1378,7 @@ async function runStages(stages, { label, reusePrepared = false }) {
     }
     if (stages.includes(HOOKS.CRATE_WRITE)) await backupCrateFiles(ctx);
     log(`${label}…`, "info");
-    await runPipeline(ctx, { bus, stages, collectTypeCounts });
+    await runPipeline(ctx, { bus, stages, collectTypeCounts, seedCrate: seedFromExisting });
     if (generation !== state.generation) return null;
     adoptCtx(ctx);
     log(`${label} finished.`, "ok");
@@ -1338,6 +1432,15 @@ $("#run-build").addEventListener("click", async (event) => {
   if (!ctx) return;
   state.hasBuilt = true;
   state.crateJson = ctx.crate ? JSON.parse(crateToJsonString(ctx.crate)) : state.crateJson;
+  // The crate just written is the existing crate from here on. Choices stand
+  // for as long as the folder stays picked, so nothing is asked again.
+  if (ctx.crate) {
+    state.crateSourceLabel = "ro-crate-metadata.json (this build)";
+    $("#existing-crate-card").hidden = false;
+    $("#existing-crate-summary").textContent = state.crateSourceLabel;
+    state.reconcile = reconcileFiles(state.crateJson, state.allFiles.map((f) => f.relativePath), { isExcluded: isScanExcluded });
+    applyFileChoices();
+  }
   renderBuildResult(ctx);
   refreshNav();
 });

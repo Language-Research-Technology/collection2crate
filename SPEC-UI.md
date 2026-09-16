@@ -95,3 +95,15 @@ ctx.progress.done();
 
 The sub-bar is not a separate call — it appears automatically the first time a tap calls `report()` more than once before `done()` (a granular, multi-item step), and stays hidden for a tap that only brackets `start()`/`done()` around a single label. `done()` always snaps the main bar to the tap's slice end and, if shown, fades the sub-bar. Only one tap is ever live at a time (handlers run sequentially), so one shared sub-bar element suffices.
 
+
+
+## 7. Reconciling files with an existing crate
+
+When a picked folder holds an existing crate whose file entities don't match the folder (SPEC.md §4.4a), a modal opens straight after the pick, using the shared `openModal` shape. It doesn't open when every file matches.
+
+- **Two lists, each shown only if it has entries:** "New files" (in the folder, not in the crate) and "Missing files" (in the crate, not in the folder). Paths use the monospace stack, and each list has a count in its heading.
+- **Each row has a two-way toggle:** Add / Ignore for new files, Remove / Keep for missing files. They default to Add and Remove, so the folder is the source of truth unless the user says otherwise.
+- **Each list has "all" controls** (Add all / Ignore all, Remove all / Keep all), because a large folder can produce hundreds of rows.
+- **Long lists scroll** inside the modal, with a filter box above them once a list passes 20 rows. The "all" controls act on the rows the filter is showing.
+- **Confirm applies the decisions.** Cancel, ✕ or Escape keeps the choices as they were — the defaults, the first time — so dismissing the modal is never a silent "keep everything".
+- **The existing-crate card on Select summarises the result** (e.g. "Next build: 3 new file(s) added, 1 missing entity removed") and has a link to reopen the modal. Changing a choice after Process has run discards what Process prepared, as changing a processing option does, since Process read a different set of files.

@@ -18,6 +18,7 @@ export function buildDeps() {
     // crate.js
     buildFileMetadata: crate.buildFileMetadata,
     buildCrate: crate.buildCrate,
+    mergeCrateInto: crate.mergeCrateInto,
     graphEntityById: crate.graphEntityById,
     loadCrateFromJson: crate.loadCrateFromJson,
     collectTypeCounts: crate.collectTypeCounts,
