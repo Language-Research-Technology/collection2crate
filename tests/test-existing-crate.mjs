@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import { ROCrate } from "ro-crate";
 import {
   CRATE_SOURCES, pickNewestCrateSource, loadExistingCrate, localFileIds,
-  reconcileFiles, resolveDecisions, withoutIgnored, seedFromExisting,
+  reconcileFiles, resolveDecisions, withoutIgnored, seedFromExisting, openCrate,
 } from "../src/existing_crate.js";
 import {
   buildFileMetadata, buildCrate, crateToJsonString, crateToXlsxBytes, collectTypeCounts, mergeCrateInto,
@@ -146,8 +146,31 @@ assert.deepEqual(CRATE_SOURCES.map((s) => s.name), ["ro-crate-metadata.json", "r
 /* ---------- seeding a build ---------- */
 
 {
-  assert.equal(seedFromExisting({}), null, "No existing crate: the build starts from nothing");
-  assert.equal(seedFromExisting({ existingCrate: null }), null);
+  const empty = seedFromExisting({ existingCrate: null });
+  assert.ok(empty instanceof ROCrate, "No existing crate: a run still starts from a crate — an empty one");
+  assert.deepEqual(empty.getGraph().map((e) => e["@id"]).sort(), ["./", "ro-crate-metadata.json"],
+    "…holding only the root and the descriptor");
+  assert.ok(empty.context.some((entry) => entry && entry.ldac), "…with this tool's context");
+  assert.notEqual(seedFromExisting({}), seedFromExisting({}), "Every run gets its own object");
+}
+
+{
+  const json = toJson(firstBuild());
+  const opened = openCrate(json);
+  opened.rootDataset.name = ["Changed"];
+  assert.notDeepEqual(json["@graph"].find((e) => e["@id"] === "./").name, ["Changed"],
+    "openCrate clones, so the working crate's JSON never changes under it");
+}
+
+{
+  // A Build that continues Process starts from Process's snapshot, not the folder's crate.
+  const existing = toJson(firstBuild());
+  const prepared = structuredClone(existing);
+  prepared["@graph"].push({ "@id": "#from-process", "@type": "Thing", name: "added during Process" });
+  const seed = seedFromExisting({ existingCrate: existing, preparedCrate: prepared, fileDecisions: { remove: ["c.txt"] } });
+  assert.ok(seed.getEntity("#from-process"), "The Process snapshot is the starting point");
+  assert.equal(seed.getEntity("c.txt"), undefined, "Removals still apply");
+  assert.ok(!existing["@graph"].some((e) => e["@id"] === "#from-process"), "The folder's crate is untouched");
 }
 
 {

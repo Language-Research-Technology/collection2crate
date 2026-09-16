@@ -147,8 +147,10 @@ export function createProgress(ui = {}) {
  * @param {string[]} [args.stages]        subset of PIPELINE_STAGES to run
  * @param {object} [args.progressUi]      host callbacks for createProgress()
  * @param {function} [args.collectTypeCounts]
- * @param {function} [args.seedCrate]     (ctx) => the existing crate to build on, or null
- *                                        (SPEC.md §4.4a). Omitted: every build starts empty.
+ * @param {function} [args.seedCrate]     (ctx) => the crate this run starts from, or null
+ *                                        (SPEC.md §4.4a). Called once, before the first
+ *                                        stage. Omitted: ctx.crate starts null and the
+ *                                        builder creates it.
  */
 export async function runPipeline(ctx, {
   bus,
@@ -185,16 +187,15 @@ export async function runPipeline(ctx, {
   };
 
   try {
+    // Every run starts from its own copy of the crate, so ctx.crate exists
+    // from the first stage on and a discarded or failed run never touches the
+    // working crate. It also replaces whatever an earlier run left on a
+    // carried ctx, so the checks below only ever see this run's crate.
+    const seeded = (seedCrate && (await seedCrate(ctx))) || null;
+    ctx.crate = seeded;
+
     for (const stage of runStages) {
-      // The core seeds the crate from the existing one immediately before
-      // crate:build, and clears whatever a previous build on this ctx left,
-      // so the checks below only ever see this run's crate.
-      let seeded = null;
-      if (stage === HOOKS.CRATE_BUILD) {
-        seeded = (seedCrate && (await seedCrate(ctx))) || null;
-        ctx.crate = seeded;
-        builderRan = false;
-      }
+      if (stage === HOOKS.CRATE_BUILD) builderRan = false;
 
       await announceAndEmit(bus, stage, ctx, { onEntry, skip: standDown });
 
@@ -207,8 +208,9 @@ export async function runPipeline(ctx, {
         if (!ctx.crate) {
           throw new Error(`crate:build finished with no crate — ${ctx.builder} built nothing.`);
         }
-        // Adding nothing to an existing crate is fine (no new files); swapping
-        // it out is not — that silently drops the user's removals and edits.
+        // Adding nothing to a seeded crate is fine (no new files); swapping it
+        // out — at crate:build or any stage before — is not: that silently
+        // drops the user's removals and edits.
         if (seeded && ctx.crate !== seeded) {
           throw new Error(`${ctx.builder} replaced the existing crate instead of adding to it.`);
         }
