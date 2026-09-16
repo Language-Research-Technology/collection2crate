@@ -39,7 +39,8 @@ The workflow follows a process of sequential steps, each emitting one or more ho
 - Interface to select folder and profile
 
 - Select folder
-    - If a crate exist, c2c loads existing crate using whichever is newest of JSON/Excel formats
+    - A folder may already hold the crate's metadata in xlsx or json form (`ro-crate-metadata.xlsx`/`ro-crate-metadata.json`). c2c loads the most recently modified one (json wins a tie) as the existing crate. The chosen source file is named in the UI, to clearly indicate the source of an existing crate when there may be several possible sources (§4.4a).
+    - If an existing crate was loaded, c2c compares its file entities with the folder. When files are new (in the folder, not the crate) or missing (in the crate, not the folder), the user is prompted to add or ignore each new file, and to remove or keep each missing file's entity (§4.4a).
 
 - Select a MASP profile 
     - Plugins are installed according to profile's tool-config 
@@ -49,7 +50,8 @@ The workflow follows a process of sequential steps, each emitting one or more ho
 - Available after profile:selected hook is emitted
 
 - Describe the collection
-    - c2c overrides existing root collection metadata with metadata from a description form. Fields are derived from selected profile's root collection metadata schema and pre-populated if there's an existing crate.
+    - Existing crate data is used to populate root collection metadata.
+    - A description form allows the user to update existing root collection metadata. Fields are derived from selected profile's root collection metadata schema and pre-populated if there's an existing crate.
 
 - Process files using plugin options
     - Plugins use this hook to affect data and metadata. Plugins may output file format conversions here so they can be written into the crate if needed.
@@ -61,7 +63,7 @@ The workflow follows a process of sequential steps, each emitting one or more ho
 4) **Build**
 - Interface to build the RO-Crate files
 - Available after profile:selected is emitted, as profiles with no plugins may entirely skip the process step
-    - c2c builds an in-memory RO-Crate
+    - c2c seeds the in-memory RO-Crate with the existing crate, after applying the user's add/remove decisions (see 2 "Select folder"), then the builder adds to it.
     - c2c uses MASP validator to validate the crate and logs pass/fail with per-rule progress
     - c2c outputs JSON and Excel formats of the crate. If a crate exists, existing `ro-crate-metadata` files are moved into a `_backups` dir (into a dated subdir) before the new crate files are generated.
     - HTML preview plugin may write a HTML static site using ROCSS.
@@ -148,7 +150,7 @@ Nine hooks are used, defined in `src/plugins/hooks.js`.
 | Hook | When | Actions |
 |---|---|---|
 | c2c:loaded | Startup | c2c initialises a `ctx` object, a shared data object which plugins can read from and write to. |
-| folder:picked | Select folder | Folder and file list stored in `ctx`, existing crate loaded to `ctx`. |
+| folder:picked | Select folder | Folder and file list stored in `ctx`; existing crate loaded to `ctx.existingCrate` and reconciled against the file list (§4.4a). |
 | profile:selected | MASP selected | Plugins selected by profile tool-config are installed and options are loaded into `ctx` options. |
 | files:prepare | Process files | Plugins may affect data and metadata. |
 | files:write | Process files | Plugins write files they derived from the folder's own (CSV, CHAT, converted media). No crate exists yet. |
@@ -162,7 +164,7 @@ Nine hooks are used, defined in `src/plugins/hooks.js`.
 
 ### 4.3 The context object
 
-When the tools starts, it creates an empty `ctx` object. Subsequent steps will add to it: `selectedDir`, `files`, `options` (every Build option and Setting, flattened), `log`.
+When the tools starts, it creates an empty `ctx` object. Subsequent steps will add to it: `selectedDir`, `files`, `options` (every Build option and Setting, flattened), `log`, and — when the folder holds a crate — `existingCrate`, `crateSourceLabel` and `fileDecisions` (§4.4a).
 
 The pipeline and plugins add to it as they go: `langById` from the AUSTLANG plugin, `entities` and `typeCounts` from the pipeline, `buildHtml` from the HTML plugin, etc.
 
@@ -179,8 +181,11 @@ await announceAndEmit(hookBus, FILES_PREPARE, ctx, { skip: standDown });   // an
 await announceAndEmit(hookBus, FILES_WRITE, ctx, { skip: standDown });     // derived files reach the folder here, before any crate exists
 await announceAndEmit(hookBus, METADATA_MERGE, ctx, { skip: standDown });
 await announceAndEmit(hookBus, CRATE_PREPARE, ctx, { skip: standDown });   // the crate's own metadata, immediately before assembly
-await announceAndEmit(hookBus, CRATE_BUILD, ctx, { skip: standDown });     // the builder at <=10, then every annotating tap from 20
-if (!ctx.crate) throw new Error(...);                 // a builder that built nothing fails the build here
+const seeded = ctx.crate = seedFromExisting(ctx);     // core: existing crate, minus removed file entities, or null (§4.4a)
+await announceAndEmit(hookBus, CRATE_BUILD, ctx, { skip: standDown, onEntry }); // the builder at <=10, then every annotating tap from 20
+if (!builderRan) throw new Error(...);                // onEntry saw the builder's turn; a builder that never ran fails here
+if (!ctx.crate) throw new Error(...);                 // no existing crate and the builder built nothing
+if (seeded && ctx.crate !== seeded) throw new Error(...); // the builder replaced the existing crate instead of adding to it
 ctx.entities   = graph.length;                        // core: entity stats
 ctx.typeCounts = collectTypeCounts(graph);
 await announceAndEmit(hookBus, CRATE_VALIDATE, ctx, { skip: standDown });
@@ -189,7 +194,9 @@ await announceAndEmit(hookBus, CRATE_WRITE, ctx, { skip: standDown });
 
 **The crate is assembled by a plugin, not by the core.** A *builder* is an
 ordinary plugin whose `crate:build` tap sits in the builder band — priority
-`<= BUILDER_PRIORITY` (10) — and assigns `ctx.crate`. Taps at 20 and above
+`<= BUILDER_PRIORITY` (10) — and produces `ctx.crate`. When the core has
+already seeded `ctx.crate` from an existing crate (§4.4a), the builder adds to
+that crate rather than replacing it; otherwise it creates one. Taps at 20 and above
 annotate the crate a builder produced, which is the assumption the old,
 separate `crate:built` stage used to guarantee. The pipeline registers nothing
 of its own on the bus: `generic-input`'s tap at 10 is what calls `crate.js`'s
@@ -205,11 +212,35 @@ won — no `analyzeFiles` method, no host special case, no input mode. A
 builder with no `activeWhen` is the fallback; the gated ones sit below it and
 take the band when their option is on.
 
-Two failures are explicit rather than silent: no active builder at all (the
-profile's options, or this deployment's `PLUGINS` selection, left none) fails
-before the first handler runs, and a builder that finishes leaving no
-`ctx.crate` fails at the end of `crate:build` rather than carrying an empty
-hand into validation.
+**A builder adds to a seeded crate and never reassigns it.** If `ctx.crate`
+is already set when the builder's tap runs, the core loaded it from the
+existing crate (§4.4a). The builder adds entities to that object; it must not
+replace it with a fresh `ROCrate`. When `ctx.crate` is `null`, the builder
+creates one, as before. Adding nothing to a seeded crate is a valid build —
+a folder with no new files.
+
+Four failures are explicit rather than silent, and the pipeline checks all of
+them itself, so no builder has to report on its own behalf:
+
+- **No active builder at all.** The profile's options, or this deployment's
+  `PLUGINS` selection, left none. This fails before the first handler runs.
+- **The builder never ran.** The pipeline watches each handler's turn through
+  `onEntry` and fails at the end of `crate:build` if the chosen builder's turn
+  never came. This can't happen with the current bus; it guards against a
+  future change to `emit`, or a builder registered on the wrong stage.
+- **No crate.** With no existing crate to start from, a builder that leaves
+  `ctx.crate` empty fails the build rather than carrying an empty hand into
+  validation.
+- **A replaced crate.** When the core seeded `ctx.crate`, it must be the same
+  object after `crate:build`. A builder that assigns a new crate would
+  silently throw away the user's existing metadata and their add/remove
+  decisions, so the build fails instead.
+
+The core sets `ctx.crate` (to the seed, or `null`) at the start of every
+build, so a crate left on a carried `ctx` by an earlier build can't hide a
+builder that built nothing this time. The seed function is passed to
+`runPipeline()` as `seedCrate`, the same way `collectTypeCounts` is. Without
+it, every build starts from `null`.
 
 **`files:write` is where derived files reach the folder.** A plugin that turns
 the folder's own files into new ones — a transcript into a CSV, a document into
@@ -218,7 +249,8 @@ inputs prepared by `files:prepare` and no crate in the picture yet. Two stages
 write to disk, and they answer different questions: `files:write` puts *files*
 in the folder, `crate:write` serialises *the crate* (§4.2). A plugin that does
 both writes its files here and adds the entities describing them at
-`crate:build`, which is the only point where `ctx.crate` exists.
+`crate:build`, which is the first point where `ctx.crate` exists (the core
+seeds it from the existing crate immediately before, §4.4a).
 
 **The two steps run disjoint halves of the pipeline.** Process runs the file
 half — `files:prepare → files:write → metadata:merge` — and Build runs the
@@ -273,6 +305,79 @@ across every tap whose `activeWhen(ctx)` passes, assigns each an ordered
 `[start%, end%]` slice of the main bar, and swaps the live slice before each
 handler — see §4.6 and SPEC-UI.md.
 
+
+
+### 4.4a The existing crate
+
+**Loading.** On `folder:picked` the core looks for `ro-crate-metadata.json` and
+`ro-crate-metadata.xlsx` in the folder root and loads whichever was modified
+most recently into `ctx.existingCrate` as a parsed graph. On a tie — the build
+writes both in the same run — `ro-crate-metadata.json` wins. The chosen
+filename goes in `ctx.crateSourceLabel` and is shown on the Select page. The
+selection lives in the core (`pickNewestCrateSource()`), not a plugin, so a
+deployment's `PLUGINS` selection can't turn it off.
+`additional-ro-crate-metadata.xlsx` is not a candidate: it belongs to the
+`xlsx-crate-input` merge plugin, and the core never reads it.
+
+**Reconciling files.** The core compares the existing crate's `File` entities
+(by `@id`, a folder-relative path) with `ctx.files` and sorts them into three
+sets:
+
+| Set | Meaning | Choices | Default |
+|---|---|---|---|
+| matched | in both | none | — |
+| new | in the folder, not in the crate | add / ignore | add |
+| missing | in the crate, not in the folder | remove / keep | remove |
+
+If `new` or `missing` has any entries, a reconcile prompt (SPEC-UI.md §7) opens
+before the user moves on to Process. The user's choices are kept as
+departures from the defaults — `{ ignore: [paths], keep: [ids] }` — and
+`resolveDecisions()` turns them into `ctx.fileDecisions`
+(`{ ignore, keep, remove }`) against the current sets. They are applied
+straight away:
+
+- An ignored new file is dropped from `ctx.files`, so no plugin scans,
+  converts or describes it on this build.
+- A removed entity leaves the crate at the seed step, with reference cleanup
+  (`hasPart`, `pcdm:hasMember` and any other property pointing at it), the same
+  way the Edit view deletes (§6.3).
+- A kept missing entity stays in the crate as it is. The build logs a warning
+  naming each one, because validation or a preview may expect a file behind it.
+
+Decisions last as long as the folder stays picked. Picking the folder again
+recomputes the sets and prompts again. An ignored file is still new next time,
+because nothing in the crate records the choice.
+
+**Seeding.** Immediately before `crate:build`, `seedFromExisting(ctx)` turns
+`ctx.existingCrate` minus the removed entities into `ctx.crate`, or sets it to
+`null` if the folder has no crate. The root entity's values have already
+reached the Describe form (§5.3); the seed step applies the form's values
+(`ctx.config.rootDataset`) over the root, so they reach the crate whichever
+builder runs. The builder then adds entities for new files — `buildCrate()`
+with `{ crate: ctx.crate }` for a folder scan, `mergeCrateInto(ctx.crate,
+ownCrate)` for a builder that assembles its own graph (`docx-input`), or for
+a later tap that used to replace the crate (`ca-data-prep`). For a matched
+file, a property the existing entity already has keeps its existing value, and
+the scan and plugins only fill in properties it lacks. That way, hand edits
+made in the Edit view, the spreadsheet or `rocxl` survive a rebuild.
+
+**After a build**, the crate just written becomes the existing crate for
+the rest of the session. The sets are recomputed against it and the user's
+choices stand, so a second build doesn't ask again.
+
+**Where it lives.** `src/existing_crate.js` (loading, reconciling, seeding —
+isomorphic apart from the two functions that take a directory handle),
+`mergeCrateInto()` in `src/crate.js` (handed to plugins through `deps`), and
+`src/reconcile_ui.js` (the prompt). `main.js` loads the crate before emitting
+`folder:picked`, so every tap on that hook already sees `ctx.existingCrate`.
+
+**Known limit.** `docx-input` reads the folder itself rather than
+`ctx.files`, so an ignored new file doesn't keep a document out of its
+parse, and its entities don't use folder paths as `@id`s, so the prompt can
+list files it has in fact described.
+
+**Nothing is written back early.** The existing crate files stay untouched
+until `crate:write`, which moves them to `_backups/` as before (§4.4).
 
 
 ### 4.5 The plugin registry
@@ -492,17 +597,10 @@ The profile's root class definition is introspected into a field schema and the 
 
 Multi-valued properties take comma-separated input and produce arrays of references. Textarea selection comes from the profile rather than a guess at the property's name — MASP's editor-definition shape has no multiline hint, and the tool has no business inferring one.
 
+**Prefilling.** Fields are pre-filled from the root entity of the existing crate (§4.4a), and the source filename is shown above the form. Edited values replace the existing ones at `crate:prepare`.
+
 **Structural properties are never rendered.** `pcdm:hasMember`, `pcdm:memberOf`, `hasPart` and `isPartOf` are dropped from the field schema even when a profile declares them. A profile is right to require that a collection have members; that requirement is satisfied by the folder scan or by supplied metadata, never by typing. Rendering them does active harm: given a class range they become entity-ref fields, so typing "magpie" mints an empty `RepositoryObject` that then appears in the preview beside the real one.
 
-**Prefilling from the folder.** A folder may already hold the crate's metadata in more than one form: the spreadsheet the collection is authored in, and the `ro-crate-metadata.json` a previous build (or a `rocxl` sync) wrote. `pickNewestCrateSource()` in collection2crate-plugins' `src/xlsx-crate-input/xlsx_crate.js` picks between them by `lastModified` — whichever the author touched last is the one they've been working in, so that's what the form reflects. Candidates, in tie-break order:
-
-1. `additional-ro-crate-metadata.xlsx`
-2. `ro-crate-metadata.xlsx`
-3. `ro-crate-metadata.json`
-
-Ties go to the earlier entry, so a build that writes its outputs in the same second doesn't flip the answer away from the hand-authored spreadsheet. The chosen file is named above the form, because with several possible sources "where did these values come from?" deserves an answer that doesn't require opening any of them.
-
-This is a **read of the root entity only** — it fills form fields, nothing more. Folding a spreadsheet's other entities into the build is the separate, opt-in job of the `xlsx-crate-input` plugin's hooks, and stays tied to the explicit `additional-ro-crate-metadata.xlsx`: merging a previous build's whole graph back in would resurrect entities for files since deleted from the folder.
 
 ### 5.4 Gating plugins and options
 
@@ -793,7 +891,7 @@ Five suites, run by `npm test`. Every one exits non-zero when the behaviour it c
 | `announceAndEmit` — logs registered plugins, and logs even when none tap a hook | `test-hooks.mjs` | ✅ |
 | `HOOKS` constants match collection2crate-plugins' real, documented contract | `test-hooks.mjs` | ✅ |
 | Progress — weight summed only over taps whose `activeWhen` passes; ordered slices; the sub-bar appears only on a second `report()` before `done()` | `test-hooks.mjs` | ✅ |
-| Pipeline — stage order (including `files:write` directly after `files:prepare` and before any crate exists), the builder ahead of every annotating `crate:build` tap, builder resolution (lowest active priority wins, the losers' taps skipped on every stage), a build with no builder and a builder that builds nothing both failing loudly | `test-hooks.mjs` | ✅ |
+| Pipeline — stage order (including `files:write` directly after `files:prepare` and before any crate exists), the builder ahead of every annotating `crate:build` tap, builder resolution (lowest active priority wins, the losers' taps skipped on every stage), a build with no builder, a builder that builds nothing, and a builder that replaces a seeded crate all failing loudly; a builder adding nothing to a seeded crate succeeding; a stale `ctx.crate` from an earlier build not masking an empty one | `test-hooks.mjs` | ✅ |
 | File metadata — id, folder chain, duplicate cross-linking | `test-crate.mjs` | ✅ |
 | Graph assembly — object mode (one `RepositoryObject` per top-level folder) | `test-crate.mjs` | ✅ |
 | Graph assembly — collection mode (nested folder links back via `pcdm:memberOf`) | `test-crate.mjs` | ✅ |
@@ -804,6 +902,7 @@ Five suites, run by `npm test`. Every one exits non-zero when the behaviour it c
 | Visualise data — delimited parsing (quotes, embedded newlines, unnamed columns), documents from tables/CHAT/text, which extensions are offered, one parse feeding both `documents` and `tables`, directories offered only when present and non-empty | `test-visualise-data.mjs` | ✅ |
 | Preview rewriting — relative paths resolved (`.`/`..`, percent-encoding, fragments), assets inlined as blobs, links to other preview pages marked for click-time resolution, the navigation script injected once and only when a page links somewhere | `test-preview-links.mjs` | ✅ |
 | Entity editing — set/delete property, add/rename/delete entity with reference cleanup, structural `@id` stability | `test-edit-crate.mjs` | ✅ |
+| Existing crate — newest source with the JSON tie-break, xlsx round-trip and fallback, new/missing sets (encoded, remote and scan-excluded ids), decisions, seeding with removal and form values, `buildCrate` adding to a seed without duplicate folder entities or contexts, `mergeCrateInto` | `test-existing-crate.mjs` | ✅ |
 | An edited crate still regenerates JSON and xlsx | `test-edit-crate.mjs` | ✅ |
 | Default profile — loads, carries this app's `buildOptions` overlay, offers nothing beyond `makeHtml` | `test-default-profile.mjs` | ✅ |
 | Profile load — validator, root dataset type, Describe schema (structural properties excluded) | `test-default-profile.mjs` | ✅ |
@@ -852,6 +951,8 @@ Dynamic imports keep heavy plugin code out of the main bundle — the docx adapt
 src/
   main.js                        UI, wizard, ctx assembly, schema composition — the one non-isomorphic module (§9.1)
   crate.js                       CORE — crate assembly, serialisation, preview rendering (isomorphic)
+  existing_crate.js              CORE — the folder's existing crate: loading, reconciling files, seeding a build (§4.4a)
+  reconcile_ui.js                the new/missing files prompt (SPEC-UI.md §7)
   masp.js                        CORE — profile fetch, load, introspection, validation (thin wrapper over ro-crate-maps)
   default_profile.js             the bundled schema.org fallback (§5.1), overlaid with this app's buildOptions
   fs_helpers.js                  CORE — File System Access API wrappers (browser-only)
@@ -872,7 +973,7 @@ public/
 
 tests/
   test-hooks.mjs              test-crate.mjs          test-edit-crate.mjs
-  test-default-profile.mjs   test-top-level-folders.mjs
+  test-default-profile.mjs   test-top-level-folders.mjs  test-existing-crate.mjs
 
 scripts/
   run-tests.mjs                 discovers and runs every tests/test-*.mjs (npm test)

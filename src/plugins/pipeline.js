@@ -147,12 +147,15 @@ export function createProgress(ui = {}) {
  * @param {string[]} [args.stages]        subset of PIPELINE_STAGES to run
  * @param {object} [args.progressUi]      host callbacks for createProgress()
  * @param {function} [args.collectTypeCounts]
+ * @param {function} [args.seedCrate]     (ctx) => the existing crate to build on, or null
+ *                                        (SPEC.md §4.4a). Omitted: every build starts empty.
  */
 export async function runPipeline(ctx, {
   bus,
   stages = PIPELINE_STAGES,
   progressUi = null,
   collectTypeCounts = null,
+  seedCrate = null,
 } = {}) {
   const runStages = stages.filter((stage) => PIPELINE_STAGES.includes(stage));
   const progress = ctx.progress || createProgress(progressUi || {});
@@ -173,17 +176,41 @@ export async function runPipeline(ctx, {
   }
 
   const { slices } = planProgress(bus, runStages, ctx, standDown);
-  const onEntry = (entry) => progress._enter?.(slices.get(entry) || { start: 0, end: 0 });
+  // The host watches the builder's turn rather than trusting a flag the
+  // builder would have to remember to set.
+  let builderRan = false;
+  const onEntry = (entry) => {
+    if (entry === builder) builderRan = true;
+    progress._enter?.(slices.get(entry) || { start: 0, end: 0 });
+  };
 
   try {
     for (const stage of runStages) {
+      // The core seeds the crate from the existing one immediately before
+      // crate:build, and clears whatever a previous build on this ctx left,
+      // so the checks below only ever see this run's crate.
+      let seeded = null;
+      if (stage === HOOKS.CRATE_BUILD) {
+        seeded = (seedCrate && (await seedCrate(ctx))) || null;
+        ctx.crate = seeded;
+        builderRan = false;
+      }
+
       await announceAndEmit(bus, stage, ctx, { onEntry, skip: standDown });
 
       if (stage === HOOKS.CRATE_BUILD) {
-        // A builder that ran and produced nothing is a failed build, not a
-        // build to carry into validation with an empty hand.
+        if (!builderRan) {
+          throw new Error(`crate:build finished without running ${ctx.builder}.`);
+        }
+        // A builder that produced nothing, with no existing crate to fall back
+        // on, is a failed build, not one to carry into validation empty-handed.
         if (!ctx.crate) {
           throw new Error(`crate:build finished with no crate — ${ctx.builder} built nothing.`);
+        }
+        // Adding nothing to an existing crate is fine (no new files); swapping
+        // it out is not — that silently drops the user's removals and edits.
+        if (seeded && ctx.crate !== seeded) {
+          throw new Error(`${ctx.builder} replaced the existing crate instead of adding to it.`);
         }
         if (collectTypeCounts) {
           const graph = ctx.crate.getGraph();

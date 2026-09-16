@@ -340,6 +340,49 @@ const builderPlugin = (name, { priority, activeWhen = null, order }) => ({
   );
 }
 
+/* ---------- building on an existing crate (SPEC.md §4.4a) ---------- */
+
+{
+  const existing = { getGraph: () => [{ "@type": "Dataset" }, { "@type": "File" }] };
+  const bus = createHookBus();
+  registerAllPlugins(bus, [
+    { name: "adds-nothing", hooks: { "crate:build": { priority: 10, handler: (ctx) => {
+      assert.equal(ctx.crate, existing, "The builder finds the seeded crate already in ctx.crate");
+    } } } },
+  ]);
+  const ctx = collectingCtx();
+  await runPipeline(ctx, { bus, stages: ["crate:build"], seedCrate: () => existing });
+  assert.equal(ctx.crate, existing,
+    "A builder that adds nothing to an existing crate is a valid build — a folder with no new files");
+}
+
+{
+  const bus = createHookBus();
+  registerAllPlugins(bus, [
+    { name: "replacer", hooks: { "crate:build": { priority: 10, handler: (ctx) => {
+      ctx.crate = { getGraph: () => [] };
+    } } } },
+  ]);
+  await assert.rejects(
+    () => runPipeline(collectingCtx(), { bus, stages: ["crate:build"], seedCrate: () => ({ getGraph: () => [] }) }),
+    /replaced the existing crate/,
+    "A builder that swaps out the seeded crate fails the build rather than dropping the user's existing metadata"
+  );
+}
+
+{
+  const bus = createHookBus();
+  registerAllPlugins(bus, [
+    { name: "empty-handed", hooks: { "crate:build": { priority: 10, handler: () => {} } } },
+  ]);
+  const ctx = collectingCtx({ crate: { getGraph: () => [] } });
+  await assert.rejects(
+    () => runPipeline(ctx, { bus, stages: ["crate:build"] }),
+    /built nothing/,
+    "A crate left on ctx by a previous build doesn't hide a builder that built nothing this time"
+  );
+}
+
 console.log(
   `test-hooks: all tests passed (${HOOK_NAMES.length} hook names, ${PIPELINE_STAGES.length} pipeline stages, ` +
   "priority ordering, sequential awaiting, shared ctx, announceAndEmit, weighted progress, builder resolution)"

@@ -169,22 +169,32 @@ export function graphEntityById(crate, id) {
  * @param {"object"|"collection"} [opts.topLevelFolderType]
  * @param {boolean} [opts.structureFromMetadata]  supplied metadata already says
  *   what belongs to what, so don't invent a parallel folder structure
- * @param {object} [opts.existingJson]   the folder's current crate, reconciled
- *   against rather than replaced
+ * @param {ROCrate} [opts.crate]        a crate to add to rather than create —
+ *   the one the pipeline seeded from the folder's existing crate (SPEC.md §4.4a).
+ *   Returned as the same object.
+ * @param {object} [opts.existingJson]   the folder's current crate as JSON,
+ *   reconciled against rather than replaced (ignored when opts.crate is given)
  * @returns {ROCrate}
+ *
+ * Adding to an existing crate follows "the existing crate wins": a property a
+ * file entity already has keeps its value, and the scan only fills in what is
+ * missing — including where the file sits, so a file the user moved in the
+ * crate stays where they put it.
  */
 export function buildCrate(filesWithMeta, config, log = () => {}, opts = {}) {
   const {
     topLevelFolderType = "object",
     structureFromMetadata = false,
     existingJson = null,
+    crate: into = null,
   } = opts || {};
   const cfg = config || {};
 
-  const crate = existingJson
-    ? new ROCrate(existingJson, { array: true, link: true })
-    : new ROCrate({ array: true, link: true });
-  crate.addContext(CRATE_CONTEXT);
+  const crate = into
+    || (existingJson
+      ? new ROCrate(existingJson, { array: true, link: true })
+      : new ROCrate({ array: true, link: true }));
+  ensureCrateContext(crate);
 
   applyRootDataset(crate, cfg, log);
   applyMetadataLicence(crate, cfg);
@@ -217,7 +227,7 @@ export function buildCrate(filesWithMeta, config, log = () => {}, opts = {}) {
     }
     // The one conditional property: written only where duplicates were
     // actually found, and only if the profile asked for it.
-    if (wantsDuplicateFlag && file.possibleDuplicates.length) {
+    if (wantsDuplicateFlag && file.possibleDuplicates.length && !asArray(entity["custom:possibleDuplicate"]).length) {
       entity["custom:possibleDuplicate"] = file.possibleDuplicates;
       anyDuplicates = true;
     }
@@ -232,6 +242,8 @@ export function buildCrate(filesWithMeta, config, log = () => {}, opts = {}) {
       }
     }
 
+    // An existing entity that already says where it belongs keeps that.
+    if (existing && asArray(existing.isPartOf).length) continue;
     const parentId = structureFromMetadata ? null : folderIds.get(file.folderChain.join("/")) || null;
     linkFileToParent(crate, file.id, parentId);
   }
@@ -249,7 +261,20 @@ export function buildCrate(filesWithMeta, config, log = () => {}, opts = {}) {
   return crate;
 }
 
-function applyRootDataset(crate, cfg, log) {
+// ro-crate's addContext dedupes by identity, so a crate loaded from JSON
+// (whose context object is a fresh copy) would gain a second copy of ours on
+// every rebuild. Add it only when no context entry already defines every
+// prefix the same way.
+function ensureCrateContext(crate) {
+  const entries = asArray(crate.context);
+  const present = entries.some((entry) =>
+    entry && typeof entry === "object"
+    && Object.entries(CRATE_CONTEXT).every(([key, iri]) => entry[key] === iri)
+  );
+  if (!present) crate.addContext(CRATE_CONTEXT);
+}
+
+export function applyRootDataset(crate, cfg, log = () => {}) {
   const root = crate.rootDataset;
   const declared = cfg.rootDataset || {};
   const types = asArray(declared.type);
@@ -286,7 +311,7 @@ function emitFolderEntities(crate, files, mode, log) {
   }
 
   for (const [top, members] of topLevels) {
-    const topId = `#${top}`;
+    const topId = structuralId(crate, `#${top}`);
     if (mode === "collection") {
       crate.addEntity({ "@id": topId, "@type": "RepositoryCollection", name: top });
       ids.set(top, topId);
@@ -300,7 +325,7 @@ function emitFolderEntities(crate, files, mode, log) {
       }
       for (const path of subfolders) {
         const childName = path.split("/")[1];
-        const childId = `#${path.replace(/\//g, "_")}`;
+        const childId = structuralId(crate, `#${path.replace(/\//g, "_")}`);
         crate.addEntity({
           "@id": childId,
           "@type": "RepositoryObject",
@@ -318,7 +343,7 @@ function emitFolderEntities(crate, files, mode, log) {
         }
       }
       if (hasLooseFiles) {
-        const filesId = `#${top}_Files`;
+        const filesId = structuralId(crate, `#${top}_Files`);
         crate.addEntity({
           "@id": filesId,
           "@type": "RepositoryObject",
@@ -339,6 +364,14 @@ function emitFolderEntities(crate, files, mode, log) {
 
   log(`Emitted ${topLevels.size} top-level folder entity(ies) in ${mode} mode.`, "muted");
   return ids;
+}
+
+// A crate that has been through a build already holds its folder entities
+// under their rewritten arcp:// ids; reuse that id rather than minting a
+// second, #-prefixed entity for the same folder.
+function structuralId(crate, hashId) {
+  const arcpId = `${ARCP_PREFIX}${hashId.slice(1)}`;
+  return crate.getEntity(arcpId) ? arcpId : hashId;
 }
 
 function addToRoot(crate, id) {
@@ -572,6 +605,103 @@ export async function crateToMultiPageHtml(crate, { config = null, css = "", pag
   };
 }
 
+
+// ---------------------------------------------------------------------------
+// Adding one crate to another (SPEC.md §4.4a)
+// ---------------------------------------------------------------------------
+
+// Membership lists grow from both sides: a builder that parsed new documents
+// has to be able to hang them off a collection the existing crate already had.
+const MEMBERSHIP_PROPS = new Set(["hasPart", "hasMember", "pcdm:hasMember"]);
+
+const isEmptyValue = (v) =>
+  v === undefined || v === null || (typeof v === "string" && v.trim() === "")
+  || (Array.isArray(v) && v.every(isEmptyValue));
+
+function sameContextEntry(a, b) {
+  if (typeof a === "string" || typeof b === "string") return a === b;
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/**
+ * Add everything in `source` to `target`, with the existing crate winning:
+ * an entity `target` lacks is added whole; one it has keeps every property it
+ * already states and only gains the ones it doesn't. Membership properties
+ * (hasPart, hasMember, pcdm:hasMember) and @type are unioned instead. The
+ * root dataset is treated the same way — the Describe form's values reached
+ * it when the pipeline seeded the crate — and references to the source's
+ * root are pointed at the target's.
+ *
+ * For a builder that assembles its own crate (docx-input, ca-data-prep) and
+ * has to land it in the one the pipeline seeded rather than replace it.
+ *
+ * @returns {{ added: number, enriched: number }} the target is modified in place
+ */
+export function mergeCrateInto(target, source) {
+  const json = typeof source?.toJSON === "function" ? source.toJSON() : source;
+  const graph = json?.["@graph"] || [];
+  const sourceDescriptor = graph.find((e) => e["@id"] === "ro-crate-metadata.json");
+  const sourceRootId = refId(sourceDescriptor?.about) || "./";
+  const targetRootId = target.rootId;
+  const targetDescriptorId = target.metadataFileEntity?.["@id"] || "ro-crate-metadata.json";
+
+  const existingContext = asArray(target.context);
+  for (const entry of asArray(json?.["@context"])) {
+    if (!existingContext.some((have) => sameContextEntry(have, entry))) target.addContext(entry);
+  }
+
+  const remap = (value) => {
+    if (Array.isArray(value)) return value.map(remap);
+    if (value && typeof value === "object" && value["@id"] === sourceRootId && sourceRootId !== targetRootId) {
+      return { "@id": targetRootId };
+    }
+    return value;
+  };
+
+  let added = 0;
+  let enriched = 0;
+  for (const raw of graph) {
+    const sourceId = raw["@id"];
+    if (!sourceId || sourceId === "ro-crate-metadata.json" || sourceId === targetDescriptorId) continue;
+    const id = sourceId === sourceRootId ? targetRootId : sourceId;
+    const incoming = {};
+    for (const [key, value] of Object.entries(raw)) incoming[key] = remap(value);
+
+    const have = target.getEntity(id);
+    if (!have) {
+      target.addEntity({ ...incoming, "@id": id });
+      added++;
+      continue;
+    }
+
+    let changed = false;
+    for (const [key, value] of Object.entries(incoming)) {
+      if (key === "@id" || isEmptyValue(value)) continue;
+      if (key === "@type") {
+        const types = asArray(have["@type"]).map(String);
+        const extra = asArray(value).map(String).filter((t) => !types.includes(t));
+        if (extra.length) { have["@type"] = [...types, ...extra]; changed = true; }
+        continue;
+      }
+      if (MEMBERSHIP_PROPS.has(key)) {
+        const current = asArray(have[key]);
+        const known = new Set(current.map(refId).filter(Boolean));
+        const extra = asArray(value).filter((v) => !known.has(refId(v)));
+        if (extra.length) {
+          have[key] = [...current.map((v) => (refId(v) ? { "@id": refId(v) } : v)), ...extra];
+          changed = true;
+        }
+        continue;
+      }
+      if (isEmptyValue(have[key])) {
+        have[key] = value;
+        changed = true;
+      }
+    }
+    if (changed) enriched++;
+  }
+  return { added, enriched };
+}
 
 // ---------------------------------------------------------------------------
 // Entity editing (SPEC.md §6.3) — isomorphic so tests/test-edit-crate.mjs

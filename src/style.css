@@ -316,3 +316,28 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
 .label-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) minmax(0, 1fr); gap: 8px; margin-bottom: 6px; align-items: center; }
 .drag-handle { cursor: grab; color: var(--muted); text-align: center; }
 .label-row.dragging { opacity: .45; }
+
+/* ------------------------------------------- reconcile prompt (SPEC-UI §7) */
+
+.reconcile-modal { width: min(760px, calc(100vw - 32px)); }
+.reconcile-section + .reconcile-section { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
+.reconcile-heading { font-size: 15px; margin: 0 0 2px; }
+.reconcile-count { color: var(--muted); font-weight: 400; font-size: 13px; }
+.reconcile-bulk { margin: 8px 0; }
+.reconcile-list {
+  list-style: none; margin: 8px 0 0; padding: 4px 10px;
+  max-height: 280px; overflow-y: auto;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+.reconcile-row { display: flex; align-items: center; gap: 12px; padding: 4px 0; }
+.reconcile-row[hidden] { display: none; }
+.reconcile-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.segmented { display: inline-flex; flex: none; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+.segment {
+  font: inherit; font-size: 13px; padding: 3px 10px; cursor: pointer;
+  background: var(--panel); color: var(--muted); border: 0;
+}
+.segment + .segment { border-left: 1px solid var(--border); }
+.segment[aria-pressed="true"] { background: var(--accent); color: #fff; }
+[data-theme="dark"] .segment[aria-pressed="true"] { color: #101319; }
+.link-button { font: inherit; font-size: 13px; background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; text-decoration: underline; }
