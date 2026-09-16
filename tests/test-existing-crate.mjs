@@ -14,6 +14,7 @@ import {
 } from "../src/existing_crate.js";
 import {
   buildFileMetadata, buildCrate, crateToJsonString, crateToXlsxBytes, collectTypeCounts, mergeCrateInto,
+  tidyContextEntries, CRATE_CONTEXT,
 } from "../src/crate.js";
 
 const noLog = () => {};
@@ -286,8 +287,65 @@ for (const topLevelFolderType of ["object", "collection"]) {
   assert.deepEqual(again, { added: 0, enriched: 0 }, "Merging the same crate twice changes nothing");
 }
 
+/* ---------- the @context ---------- */
+
+const RO_CRATE_URL = "https://w3id.org/ro/crate/1.2/context";
+const VOCAB = { "@vocab": "http://schema.org/" };
+const TIDY = [RO_CRATE_URL, VOCAB, { ...CRATE_CONTEXT }];
+
+{
+  assert.deepEqual(tidyContextEntries([
+    RO_CRATE_URL,
+    { ...VOCAB, ldac: CRATE_CONTEXT.ldac, custom: CRATE_CONTEXT.custom },
+    { ...CRATE_CONTEXT },
+    VOCAB, { ldac: CRATE_CONTEXT.ldac }, { pcdm: CRATE_CONTEXT.pcdm },
+    RO_CRATE_URL,
+  ]), [RO_CRATE_URL, VOCAB, { ldac: CRATE_CONTEXT.ldac, custom: CRATE_CONTEXT.custom, pcdm: CRATE_CONTEXT.pcdm, AUSTLANG: CRATE_CONTEXT.AUSTLANG }],
+  "URLs once, one keyword entry, one entry of terms");
+  assert.deepEqual(tidyContextEntries([{ x: "https://a/" }, { x: "https://b/" }]), [{ x: "https://b/" }],
+    "A term defined twice keeps its later definition, as JSON-LD reads it");
+  assert.deepEqual(tidyContextEntries(RO_CRATE_URL), [RO_CRATE_URL], "A lone context string is an array of one");
+}
+
+{
+  // The shape that showed up in a folder's crate: a spreadsheet read back
+  // (terms folded into the @vocab entry), our context added again beside it,
+  // and a builder's per-prefix entries merged on top.
+  const bytes = await crateToXlsxBytes(firstBuild());
+  const { dir, stat } = folder([["ro-crate-metadata.xlsx", xlsxFile(bytes, 3000)]]);
+  const loaded = await loadExistingCrate(dir, noLog, stat);
+  const seeded = seedFromExisting({ existingCrate: loaded.json, config: CONFIG, log: noLog });
+  buildCrate(buildFileMetadata(FILES), CONFIG, noLog, { crate: seeded });
+  const builder = new ROCrate({ array: true, link: true });
+  builder.addContext({ ldac: CRATE_CONTEXT.ldac });
+  builder.addContext({ pcdm: CRATE_CONTEXT.pcdm });
+  mergeCrateInto(seeded, builder);
+  const context = toJson(seeded)["@context"];
+  assert.equal(context.length, 3, `A crate read from its spreadsheet and rebuilt keeps a three-entry context, got ${JSON.stringify(context)}`);
+  assert.deepEqual(context.slice(0, 2), TIDY.slice(0, 2));
+  assert.deepEqual(Object.keys(context[2]).sort(), Object.keys(CRATE_CONTEXT).sort());
+
+  // And rebuilding from what was written changes nothing.
+  const again = seedFromExisting({ existingCrate: toJson(seeded), config: CONFIG, log: noLog });
+  buildCrate(buildFileMetadata(FILES), CONFIG, noLog, { crate: again });
+  mergeCrateInto(again, builder);
+  assert.deepEqual(toJson(again)["@context"], context, "A rebuild leaves the context as it was");
+}
+
+{
+  // A crate written before contexts were tidied is tidied when it is opened.
+  const messy = { ...toJson(firstBuild()) };
+  messy["@context"] = [RO_CRATE_URL, { ...VOCAB, ldac: CRATE_CONTEXT.ldac }, { ...CRATE_CONTEXT }, VOCAB, { ldac: CRATE_CONTEXT.ldac }];
+  assert.deepEqual(openCrate(messy).toJSON()["@context"], TIDY);
+  const empty = openCrate(null);
+  assert.deepEqual(toJson(empty)["@context"], TIDY, "A new crate has the same shape");
+  empty.addContext({ ldac: CRATE_CONTEXT.ldac });
+  assert.deepEqual(toJson(empty)["@context"], TIDY, "Writing tidies whatever was added since");
+  assert.equal(empty.resolveTerm("ldac:speaker"), "https://w3id.org/ldac/terms#speaker", "The terms still resolve");
+}
+
 console.log(
   "test-existing-crate: all tests passed (source choice + json tie-break, xlsx round-trip and fallback, " +
   "reconcile sets incl. encoded/remote/excluded ids, decisions, ignored files, seeding with removal, " +
-  "buildCrate adding to a seed without duplicates, form values on the seed, mergeCrateInto)"
+  "buildCrate adding to a seed without duplicates, form values on the seed, mergeCrateInto, tidy @context)"
 );

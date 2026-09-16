@@ -261,17 +261,74 @@ export function buildCrate(filesWithMeta, config, log = () => {}, opts = {}) {
   return crate;
 }
 
-// ro-crate's addContext dedupes by identity, so a crate loaded from JSON
-// (whose context object is a fresh copy) would gain a second copy of ours on
-// every rebuild. Add it only when no context entry already defines every
-// prefix the same way.
+// ---------------------------------------------------------------------------
+// The @context
+// ---------------------------------------------------------------------------
+
+/**
+ * A context array in one shape: its URLs (each once, in order), then one
+ * entry of keywords (`@vocab`, `@base`), then one entry of term definitions.
+ * Object entries are folded together with a later definition of a term
+ * winning, as it would in JSON-LD; a term defined twice the same way is
+ * simply defined once.
+ *
+ * Crates reach a build with their context in many shapes: ro-crate-excel
+ * folds a spreadsheet's @context rows into the {"@vocab"} entry, a builder
+ * adds one entry per prefix, ro-crate's addContext only skips the very same
+ * object. Comparing entries as they stand let every one of those add another
+ * copy of what the context already said.
+ */
+export function tidyContextEntries(entries) {
+  const urls = [];
+  const keywords = {};
+  const terms = {};
+  const others = [];
+  for (const entry of asArray(entries)) {
+    if (typeof entry === "string") {
+      if (!urls.includes(entry)) urls.push(entry);
+    } else if (entry && typeof entry === "object" && !Array.isArray(entry)) {
+      for (const [key, value] of Object.entries(entry)) {
+        const into = key.startsWith("@") ? keywords : terms;
+        // Re-set at the end, so the order reads as the definitions apply.
+        if (key in into && JSON.stringify(into[key]) !== JSON.stringify(value)) delete into[key];
+        into[key] = value;
+      }
+    } else if (entry != null) {
+      others.push(entry);
+    }
+  }
+  return [
+    ...urls,
+    ...(Object.keys(keywords).length ? [keywords] : []),
+    ...(Object.keys(terms).length ? [terms] : []),
+    ...others,
+  ];
+}
+
+/**
+ * Put a crate's context into tidyContextEntries' shape, in place.
+ * @returns {boolean} whether anything changed
+ */
+export function tidyContext(crate) {
+  // ro-crate keeps the entries in __context and has no setter for them; the
+  // array is edited in place so its string entries stay resolved.
+  const entries = crate?.__context;
+  if (!Array.isArray(entries)) return false;
+  const next = tidyContextEntries(entries);
+  if (JSON.stringify(next) === JSON.stringify(entries)) return false;
+  entries.splice(0, entries.length, ...next);
+  return true;
+}
+
+// Our four prefixes, added where the context lacks one or defines it
+// otherwise — and only those, so a crate that already has them gains nothing.
 function ensureCrateContext(crate) {
-  const entries = asArray(crate.context);
-  const present = entries.some((entry) =>
-    entry && typeof entry === "object"
-    && Object.entries(CRATE_CONTEXT).every(([key, iri]) => entry[key] === iri)
-  );
-  if (!present) crate.addContext(CRATE_CONTEXT);
+  tidyContext(crate);
+  const defined = Object.assign({}, ...asArray(crate.context).filter((e) => e && typeof e === "object"));
+  const missing = Object.fromEntries(Object.entries(CRATE_CONTEXT).filter(([key, iri]) => defined[key] !== iri));
+  if (!Object.keys(missing).length) return;
+  crate.addContext(missing);
+  tidyContext(crate);
 }
 
 export function applyRootDataset(crate, cfg, log = () => {}) {
@@ -457,6 +514,9 @@ export function addLanguageEntities(crate, filesWithMeta, langById) {
 // ---------------------------------------------------------------------------
 
 export function crateToJsonString(crate) {
+  // Whatever put a context entry in since the crate was opened, the file
+  // gets the tidy shape.
+  tidyContext(crate);
   return JSON.stringify(crate.toJSON(), null, 2);
 }
 
@@ -618,11 +678,6 @@ const isEmptyValue = (v) =>
   v === undefined || v === null || (typeof v === "string" && v.trim() === "")
   || (Array.isArray(v) && v.every(isEmptyValue));
 
-function sameContextEntry(a, b) {
-  if (typeof a === "string" || typeof b === "string") return a === b;
-  return JSON.stringify(a) === JSON.stringify(b);
-}
-
 /**
  * Add everything in `source` to `target`, with the existing crate winning:
  * an entity `target` lacks is added whole; one it has keeps every property it
@@ -645,10 +700,10 @@ export function mergeCrateInto(target, source) {
   const targetRootId = target.rootId;
   const targetDescriptorId = target.metadataFileEntity?.["@id"] || "ro-crate-metadata.json";
 
-  const existingContext = asArray(target.context);
-  for (const entry of asArray(json?.["@context"])) {
-    if (!existingContext.some((have) => sameContextEntry(have, entry))) target.addContext(entry);
-  }
+  // Everything the source's context defines, folded into the target's
+  // entries rather than appended beside them.
+  for (const entry of asArray(json?.["@context"])) target.addContext(entry);
+  tidyContext(target);
 
   const remap = (value) => {
     if (Array.isArray(value)) return value.map(remap);

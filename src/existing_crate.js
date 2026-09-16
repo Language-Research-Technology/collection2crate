@@ -8,7 +8,7 @@
 // selection can't switch it off.
 
 import { ROCrate } from "ro-crate";
-import { deleteEntity, applyRootDataset, CRATE_CONTEXT } from "./crate.js";
+import { deleteEntity, applyRootDataset, tidyContext, CRATE_CONTEXT } from "./crate.js";
 import { statFile } from "./fs_helpers.js";
 
 // The core's two outputs, in tie-break order: the build writes both in the
@@ -202,7 +202,11 @@ export function openCrate(json) {
     crate.addContext(CRATE_CONTEXT);
     return crate;
   }
-  return new ROCrate(structuredClone(json), { array: true, link: true });
+  const crate = new ROCrate(structuredClone(json), { array: true, link: true });
+  // A crate read from ro-crate-metadata.xlsx has its terms folded into the
+  // {"@vocab"} entry; one written before contexts were tidied has repeats.
+  tidyContext(crate);
+  return crate;
 }
 
 /**

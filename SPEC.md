@@ -693,6 +693,8 @@ Isomorphic: imports only browser-safe entry points, returns strings and bytes ra
 
 **Graph assembly.** `buildCrate(filesWithMeta, config, log, opts)` initialises an `ROCrate` with the `ldac`, `pcdm`, `custom`, and `AUSTLANG` contexts, applies the profile-derived root dataset, emits folder and file entities, and rewrites structural hash-ids (`#Dyirbal`) to `arcp://` form on export.
 
+**The `@context` has one shape.** `tidyContext()` keeps it as its URLs (each once), one entry of keywords (`@vocab`) and one entry of term definitions, a later definition of a term winning. It runs when a crate is opened (`openCrate`), when `buildCrate` adds our four prefixes (only the ones missing or defined otherwise), after `mergeCrateInto` folds a builder's context in, and in `crateToJsonString`. Without it, contexts repeated across builds: ro-crate-excel folds a spreadsheet's `@context` rows into the `{"@vocab"}` entry, builders add one entry per prefix, and ro-crate's `addContext` only skips the very same object.
+
 Top-level folders are emitted one of two ways:
 
 | Mode | Structure |
@@ -936,7 +938,7 @@ Five suites, run by `npm test`. Every one exits non-zero when the behaviour it c
 | Preview rewriting — relative paths resolved (`.`/`..`, percent-encoding, fragments), assets inlined as blobs, links to other preview pages marked for click-time resolution, the navigation script injected once and only when a page links somewhere | `test-preview-links.mjs` | ✅ |
 | Entity editing — set/delete property, add/rename/delete entity with reference cleanup, structural `@id` stability | `test-edit-crate.mjs` | ✅ |
 | Working crate — unsaved/saved state, change token, replacement, cached JSON; root values → form text and → config without re-synthesis; form text → root, incl. clearing and entity reuse | `test-working-crate.mjs` | ✅ |
-| Existing crate — newest source with the JSON tie-break, xlsx round-trip and fallback, new/missing sets (encoded, remote and scan-excluded ids), decisions, seeding with removal and form values, an empty crate when there is none, the Process snapshot taking precedence, `buildCrate` adding to a seed without duplicate folder entities or contexts, `mergeCrateInto` | `test-existing-crate.mjs` | ✅ |
+| Existing crate — newest source with the JSON tie-break, xlsx round-trip and fallback, new/missing sets (encoded, remote and scan-excluded ids), decisions, seeding with removal and form values, an empty crate when there is none, the Process snapshot taking precedence, `buildCrate` adding to a seed without duplicate folder entities or contexts, `mergeCrateInto`, one tidy `@context` after an xlsx round-trip, a rebuild and a merge | `test-existing-crate.mjs` | ✅ |
 | An edited crate still regenerates JSON and xlsx | `test-edit-crate.mjs` | ✅ |
 | Default profile — loads, carries this app's `buildOptions` overlay, offers nothing beyond `makeHtml` | `test-default-profile.mjs` | ✅ |
 | Profile load — validator, root dataset type, Describe schema (structural properties excluded) | `test-default-profile.mjs` | ✅ |
