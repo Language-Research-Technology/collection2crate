@@ -201,6 +201,16 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
 .option-children[hidden] { display: none; }
 .option .field-hint { margin-top: 2px; }
 .file-chosen { font-family: var(--mono); font-size: 12px; color: var(--ok); }
+/* A file option that takes a folder too (folder: true). */
+.drop-zone {
+  border: 2px dashed var(--border); border-radius: var(--radius);
+  padding: 12px 14px; background: var(--panel);
+  transition: border-color .12s, background .12s;
+}
+.drop-zone.is-dragover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--panel)); }
+.drop-zone-prompt { margin: 0; color: var(--muted); font-size: 13px; }
+.drop-zone .actions { margin: 8px 0 4px; }
+.drop-zone .file-chosen { display: block; overflow-wrap: anywhere; }
 
 /* ------------------------------------------------------------------- tabs */
 

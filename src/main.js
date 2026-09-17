@@ -31,6 +31,7 @@ import {
   createWorkingCrate, rootFieldText, rootFormValues, rootPropertiesForFields, applyFieldText,
 } from "./working_crate.js";
 import { openReconcileModal } from "./reconcile_ui.js";
+import { buildUploadValue, describeUpload, entriesFromPickedFiles, filesFromDataTransfer } from "./upload_files.js";
 import { buildPreviewBlobUrl, PAGE_RESOLVER_NAME } from "./preview_assets.js";
 import { loadDirectory, readerFor, scanOutputDirectories } from "./visualise_data.js";
 import { createHookBus, registerAllPlugins, announceAndEmit, HOOKS } from "./plugins/hooks.js";
@@ -429,9 +430,136 @@ function renderOptionNode(node, onChange) {
   return wrapper;
 }
 
+// The option key's stem, as a hint for which uploaded file is the main one:
+// "configFile" → "config".
+const uploadStem = (key) => String(key || "").replace(/(File|Upload)$/, "").toLowerCase();
+
+/**
+ * A file option that also takes a folder (`folder: true`): a drop zone for
+ * files or a whole folder, plus "Choose files…" and "Choose folder…". For
+ * a config that points at templates by relative path — the folder keeps its
+ * subfolders, where loose files would be flattened.
+ */
+function buildFolderUploadControl(node, emit) {
+  const box = document.createElement("div");
+  box.className = "field";
+  const span = document.createElement("span");
+  span.className = "field-label";
+  span.textContent = node.label;
+
+  const zone = document.createElement("div");
+  zone.className = "drop-zone";
+  zone.tabIndex = 0;
+  zone.setAttribute("role", "group");
+  zone.setAttribute("aria-label", `${node.label}: drop files or a folder here`);
+  const prompt = document.createElement("p");
+  prompt.className = "drop-zone-prompt";
+  prompt.textContent = "Drop a file or a whole folder here, or";
+
+  const filesInput = document.createElement("input");
+  filesInput.type = "file";
+  filesInput.multiple = true;
+  filesInput.hidden = true;
+  if (node.accept) filesInput.accept = node.accept;
+  const folderInput = document.createElement("input");
+  folderInput.type = "file";
+  folderInput.hidden = true;
+  folderInput.webkitdirectory = true;
+  folderInput.setAttribute("webkitdirectory", "");
+
+  const pickFiles = document.createElement("button");
+  pickFiles.type = "button";
+  pickFiles.className = "button";
+  pickFiles.textContent = "Choose files…";
+  pickFiles.addEventListener("click", () => filesInput.click());
+  const pickFolder = document.createElement("button");
+  pickFolder.type = "button";
+  pickFolder.className = "button";
+  pickFolder.textContent = "Choose folder…";
+  pickFolder.addEventListener("click", () => folderInput.click());
+  const clear = document.createElement("button");
+  clear.type = "button";
+  clear.className = "icon-button";
+  clear.textContent = "Clear";
+  const chosen = document.createElement("span");
+  chosen.className = "file-chosen";
+
+  const buttons = document.createElement("div");
+  buttons.className = "actions";
+  buttons.append(pickFiles, pickFolder, clear);
+  zone.append(prompt, buttons, chosen, filesInput, folderInput);
+
+  const uploadKey = uploadKeyFor(node.key);
+  const show = () => {
+    const value = state.options[uploadKey];
+    chosen.textContent = describeUpload(value);
+    clear.hidden = !value;
+  };
+  const take = (entries, folder) => {
+    const value = buildUploadValue(entries, { accept: node.accept, prefer: uploadStem(node.key), folder });
+    state.options[uploadKey] = value;
+    state.options[node.key] = value ? value.name : null;
+    show();
+    emit();
+  };
+
+  filesInput.addEventListener("change", () => {
+    if (filesInput.files?.length) take(entriesFromPickedFiles(filesInput.files), null);
+    filesInput.value = "";
+  });
+  folderInput.addEventListener("change", () => {
+    const files = [...(folderInput.files || [])];
+    if (files.length) take(entriesFromPickedFiles(files), files[0].webkitRelativePath.split("/")[0] || null);
+    folderInput.value = "";
+  });
+  clear.addEventListener("click", () => take([], null));
+
+  // dragenter/dragleave fire for every child crossed, so the highlight is
+  // counted rather than toggled.
+  let depth = 0;
+  const setActive = (on) => zone.classList.toggle("is-dragover", on);
+  zone.addEventListener("dragenter", (event) => {
+    if (![...(event.dataTransfer?.types || [])].includes("Files")) return;
+    event.preventDefault();
+    depth++;
+    setActive(true);
+  });
+  zone.addEventListener("dragover", (event) => {
+    if (![...(event.dataTransfer?.types || [])].includes("Files")) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  });
+  zone.addEventListener("dragleave", () => {
+    depth = Math.max(0, depth - 1);
+    if (!depth) setActive(false);
+  });
+  zone.addEventListener("drop", async (event) => {
+    event.preventDefault();
+    depth = 0;
+    setActive(false);
+    try {
+      const { entries, folder } = await filesFromDataTransfer(event.dataTransfer);
+      if (entries.length) take(entries, folder);
+    } catch (e) {
+      log(`${node.label}: could not read what was dropped — ${e.message}`, "err");
+    }
+  });
+
+  show();
+  box.append(span, zone);
+  return box;
+}
+
 function buildControl(node, onChange) {
   const emit = () => { onChange?.(node); control.onAfterChange?.(); };
   const control = { kind: "checkbox", element: null, input: null, onAfterChange: null };
+
+  if (node.type === "file" && node.folder) {
+    control.kind = "file";
+    control.element = buildFolderUploadControl(node, emit);
+    control.input = control.element.querySelector("input");
+    return control;
+  }
 
   if (node.type === "file") {
     control.kind = "file";
