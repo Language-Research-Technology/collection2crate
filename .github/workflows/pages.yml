@@ -1,0 +1,85 @@
+# Builds the app and publishes it to GitHub Pages.
+#
+# The repo's own files aren't a site: index.html points at /src/ and main.js
+# imports npm packages plus collection2crate-plugins, which package.json takes
+# from a sibling checkout (file:../collection2crate-plugins). So both repos are
+# checked out side by side, built with Vite, and dist/ is what gets published.
+#
+# Pages' source has to be "GitHub Actions" (Settings → Pages) for the deploy
+# job to publish.
+#
+# A change merged into collection2crate-plugins doesn't trigger this on its
+# own: run it from the Actions tab ("Run workflow") to publish one.
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out collection2crate
+        uses: actions/checkout@v4
+        with:
+          path: collection2crate
+
+      - name: Check out collection2crate-plugins beside it
+        uses: actions/checkout@v4
+        with:
+          repository: Language-Research-Technology/collection2crate-plugins
+          ref: main
+          path: collection2crate-plugins
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            collection2crate/package-lock.json
+            collection2crate-plugins/package-lock.json
+
+      # The plugins checkout is linked into the app's node_modules, and its
+      # own dependencies resolve from its own node_modules.
+      - name: Install the plugins' dependencies
+        working-directory: collection2crate-plugins
+        run: npm ci --no-audit --no-fund
+
+      - name: Install the app's dependencies
+        working-directory: collection2crate
+        run: npm ci --no-audit --no-fund
+
+      - name: Test
+        working-directory: collection2crate
+        run: npm test
+
+      # PLUGINS is unset, so every plugin is built in (SPEC.md §4.7a).
+      - name: Build
+        working-directory: collection2crate
+        run: npm run build
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: collection2crate/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
