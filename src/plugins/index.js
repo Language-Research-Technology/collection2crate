@@ -4,7 +4,7 @@
 // do). Which plugins appear here comes from the PLUGINS env var; see
 // SPEC.md §4.7a.
 //
-//   PLUGINS=generic-input,docx-input,xlsx-crate-input,austlang,file-format-identify,transcript-grammar,ca-data-prep,chat-export,merge,roctable,validate-crate,ro-crate-json-output,ro-crate-xlsx-output,ro-crate-html-output,concordance,ngrams,chart
+//   PLUGINS=generic-input,docx-input,xlsx-crate-input,austlang,file-format-identify,transcript-grammar,ca-data-prep,chat-export,merge,roctable,validate-crate,ro-crate-json-output,ro-crate-xlsx-output,ro-crate-html-output,concordance,ngrams,chart,collocation
 
 import { buildDeps } from "./deps.js";
 import { createPlugin as create_generic_input } from "collection2crate-plugins/plugins/generic-input/index.js";
@@ -24,6 +24,7 @@ import { createPlugin as create_ro_crate_html_output } from "collection2crate-pl
 import { createPlugin as create_concordance } from "collection2crate-plugins/plugins/concordance/index.js";
 import { createPlugin as create_ngrams } from "collection2crate-plugins/plugins/ngrams/index.js";
 import { createPlugin as create_chart } from "collection2crate-plugins/plugins/chart/index.js";
+import { createPlugin as create_collocation } from "collection2crate-plugins/plugins/collocation/index.js";
 
 // One deps object, built once, handed to every factory (SPEC.md §4.7a).
 const deps = buildDeps();
@@ -52,6 +53,7 @@ export const PLUGINS = [
   create_concordance(deps),
   create_ngrams(deps),
   create_chart(deps),
+  create_collocation(deps),
 ];
 
 /** Every plugin's Build-panel option schema, in plugin order. */
