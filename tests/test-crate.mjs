@@ -225,6 +225,49 @@ const ids = (value) => [].concat(value ?? []).map((v) => (v && typeof v === "obj
     "The default namespace is never used once the crate has adopted another one");
 }
 
+/* ---------- a folder entity is matched by name, not by guessing the existing id's exact encoding ---------- */
+
+{
+  // A pipeline that isn't this tool sanitised the folder's local path segment
+  // (spaces -> underscores) when it minted the id, but left `name` as the
+  // literal folder name. This tool's own scan never sees that sanitisation —
+  // it reads "1. Culture" straight off disk — so the ids can never be guessed
+  // into agreement; only `name` (plus @type and parent) ties them together.
+  const NAMESPACE = "2026-ldaca-community-workshops-gooreng-gooreng";
+  const existingId = `arcp://name,${NAMESPACE}/1._Culture`;
+  const existingJson = {
+    "@context": ["https://w3id.org/ro/crate/1.1/context"],
+    "@graph": [
+      { "@id": "ro-crate-metadata.json", "@type": "CreativeWork", about: { "@id": "./" } },
+      { "@id": "./", "@type": "Dataset", name: "Test collection", hasPart: [{ "@id": existingId }] },
+      {
+        "@id": existingId,
+        "@type": "RepositoryObject",
+        name: "1. Culture",
+        conformsTo: [{ "@id": "https://w3id.org/ldac/profile#Object" }],
+        description: ["Language and cultural materials."],
+        license: [{ "@id": "https://creativecommons.org/licenses/by-nc-nd/4.0/" }],
+        hasPart: [{ "@id": "1. Culture/notes.txt" }],
+      },
+      { "@id": "1. Culture/notes.txt", "@type": "File", name: "notes.txt", isPartOf: [{ "@id": existingId }] },
+    ],
+  };
+  const scanned = [{ name: "notes.txt", relativePath: "1. Culture/notes.txt" }, { name: "photo.jpg", relativePath: "1. Culture/photo.jpg" }];
+
+  const crate = buildCrate(buildFileMetadata(scanned), TEST_CONFIG, noLog, { existingJson });
+
+  assert.equal(collectTypeCounts(crate.getGraph()).RepositoryObject, 1,
+    "One folder on disk is still one RepositoryObject, even though the scan's id guess and the existing id disagree");
+  const folder = byId(crate, existingId);
+  assert.ok(folder, "The existing, richly-described folder entity is kept under its own id");
+  assert.deepEqual(ids(folder.conformsTo), ["https://w3id.org/ldac/profile#Object"],
+    "Reusing the existing entity never clobbers the metadata it already carried");
+  assert.deepEqual(folder.description, ["Language and cultural materials."],
+    "…including plain-value properties like description");
+  assert.ok(ids(byId(crate, "1. Culture/photo.jpg").isPartOf).includes(existingId),
+    "A newly-scanned file in the same folder links to the existing entity, not a fresh duplicate");
+}
+
 /* ---------- language entities ---------- */
 
 {
@@ -316,5 +359,6 @@ const ids = (value) => [].concat(value ?? []).map((v) => (v && typeof v === "obj
 console.log(
   "test-crate: all tests passed (file metadata + duplicates, object and collection modes, " +
   "profile file properties, structureFromMetadata, existing-crate reconcile, arcp:// namespace " +
-  "adoption, language entities, type counts, and all three real outputs)"
+  "adoption, folder matching by name across a differently-encoded existing id, language entities, " +
+  "type counts, and all three real outputs)"
 );
