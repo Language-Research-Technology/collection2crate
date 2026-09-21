@@ -11,6 +11,7 @@ import { ROCrate } from "ro-crate";
 import {
   CRATE_SOURCES, pickNewestCrateSource, loadExistingCrate, localFileIds,
   reconcileFiles, resolveDecisions, withoutIgnored, seedFromExisting, openCrate,
+  isRefusedName, refusedSegment, partitionMissing,
 } from "../src/existing_crate.js";
 import {
   buildFileMetadata, buildCrate, crateToJsonString, crateToXlsxBytes, collectTypeCounts, mergeCrateInto,
@@ -344,8 +345,68 @@ const TIDY = [RO_CRATE_URL, VOCAB, { ...CRATE_CONTEXT }];
   assert.equal(empty.resolveTerm("ldac:speaker"), "https://w3id.org/ldac/terms#speaker", "The terms still resolve");
 }
 
+{
+  // A directory the browser will not name is not a deletion. Chromium's
+  // portable-name filter refuses a leading or trailing "~", a trailing "." or
+  // space and the Windows device names — and, the part that offered 100 live
+  // files for removal, such an entry is also left out of entries() silently,
+  // so the scan cannot see it at all. The verdicts below are the ones Chrome
+  // 152 actually returned for these names.
+  for (const name of ["CORR#RJ~", "~leading", "mid~dle~", "~", "a~", "trailing.", "trailing ", "CON", "aux.txt", "..", ""]) {
+    assert.equal(isRefusedName(name), true, `expected ${JSON.stringify(name)} to be refused`);
+  }
+  for (const name of ["CORR#RJ", "mid~dle", "12345~78", "220L#~CU.PDF", "PROGRA~1", "ABCDEF~1.TXT", "CORR#RJ~.txt", "hash#mid", "at@mid", "plain"]) {
+    assert.equal(isRefusedName(name), false, `expected ${JSON.stringify(name)} to be accepted`);
+  }
+  assert.equal(refusedSegment("a/b/CORR#RJ~/c.pdf"), "CORR#RJ~", "The offending segment is named, for the warning");
+  assert.equal(refusedSegment("a/b/CORR#RJ/c.pdf"), null);
+}
+
+{
+  // Missing entities split by whether the scan could ever have seen them.
+  const missing = ["Corr/CORR#RJ~/one.pdf", "Corr/CORR#RJ~/two.pdf", "Corr/Ok/deleted.pdf"];
+  // The name alone is enough, which is what keeps this testable without a browser.
+  const byName = await partitionMissing(missing);
+  assert.deepEqual(byName.gone, ["Corr/Ok/deleted.pdf"]);
+  assert.deepEqual(byName.unreadable.map((u) => u.id), missing.slice(0, 2));
+  assert.equal(byName.unreadable[0].segment, "CORR#RJ~");
+
+  // A probe reporting a path reachable-but-unlisted is also a blind spot.
+  const probed = await partitionMissing(["Corr/Ok/there.pdf", "Corr/Ok/deleted.pdf"], {
+    probe: async (path) => (path.endsWith("there.pdf") ? "ok" : "missing"),
+  });
+  assert.deepEqual(probed.gone, ["Corr/Ok/deleted.pdf"]);
+  assert.deepEqual(probed.unreadable.map((u) => u.reason), ["unlisted"]);
+
+  // An encoded @id is probed as the path it stands for.
+  const encoded = await partitionMissing(["Corr/CORR%23RJ~/one.pdf"]);
+  assert.deepEqual(encoded.gone, []);
+  assert.equal(encoded.unreadable[0].segment, "CORR#RJ~");
+}
+
+{
+  // The default must never remove an entity the scan could not see.
+  const result = {
+    newFiles: [],
+    missingFiles: ["Corr/CORR#RJ~/one.pdf", "Corr/Ok/deleted.pdf"],
+    unreadable: ["Corr/CORR#RJ~/one.pdf"],
+  };
+  const untouched = resolveDecisions(result, {});
+  assert.deepEqual(untouched.remove, ["Corr/Ok/deleted.pdf"]);
+  assert.deepEqual(untouched.keep, ["Corr/CORR#RJ~/one.pdf"], "Kept, so the build log warns about it");
+
+  const both = resolveDecisions(result, { keep: ["Corr/Ok/deleted.pdf"] });
+  assert.deepEqual(both.remove, [], "A genuinely deleted one can still be kept as well");
+  assert.equal(both.keep.length, 2);
+
+  // Without the unreadable list, the old behaviour is untouched.
+  const plain = resolveDecisions({ newFiles: [], missingFiles: result.missingFiles }, {});
+  assert.deepEqual(plain.remove, result.missingFiles);
+}
+
 console.log(
   "test-existing-crate: all tests passed (source choice + json tie-break, xlsx round-trip and fallback, " +
   "reconcile sets incl. encoded/remote/excluded ids, decisions, ignored files, seeding with removal, " +
-  "buildCrate adding to a seed without duplicates, form values on the seed, mergeCrateInto, tidy @context)"
+  "buildCrate adding to a seed without duplicates, form values on the seed, mergeCrateInto, tidy @context, " +
+  "browser-refused names kept rather than removed)"
 );

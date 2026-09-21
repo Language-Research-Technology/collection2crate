@@ -55,6 +55,56 @@ export async function getDirectoryHandleAtPath(dirHandle, path, { create = false
   return current;
 }
 
+/**
+ * Whether a folder-relative path can be reached through the File System Access
+ * API at all, and if not, why.
+ *
+ * Chromium applies a portable-filename filter to every name crossing the API:
+ * a leading or trailing "~", a trailing "." or space, and the Windows device
+ * names (CON, NUL, aux.txt, …) are refused with a TypeError, before any
+ * lookup. Worse for a scan, such an entry is also silently omitted from
+ * `entries()` — no error, no empty directory, it simply is not listed. So a
+ * folder the browser cannot name is indistinguishable, from inside the walk,
+ * from a folder that was deleted; only asking for it by name tells them apart.
+ *
+ * @returns {Promise<"ok"|"refused"|"missing"|"unknown">}
+ *   "ok" — reachable; "refused" — a segment's name is one the browser will not
+ *   accept, so the scan can never see it; "missing" — nameable, but not there.
+ */
+export async function probePath(dirHandle, path) {
+  if (!dirHandle) return "unknown";
+  const parts = splitPath(path);
+  if (!parts.length) return "unknown";
+  const last = parts.pop();
+  let current = dirHandle;
+  for (const part of parts) {
+    try {
+      current = await current.getDirectoryHandle(part);
+    } catch (e) {
+      if (e?.name === "TypeError") return "refused";
+      if (e?.name === "NotFoundError") return "missing";
+      if (e?.name === "TypeMismatchError") return "missing";
+      return "unknown";
+    }
+  }
+  // The leaf may be either kind; only its name's acceptability is in question.
+  try {
+    await current.getFileHandle(last);
+    return "ok";
+  } catch (e) {
+    if (e?.name === "TypeError") return "refused";
+    if (e?.name === "TypeMismatchError") return "ok"; // exists, as a directory
+    if (e?.name !== "NotFoundError") return "unknown";
+  }
+  try {
+    await current.getDirectoryHandle(last);
+    return "ok";
+  } catch (e) {
+    if (e?.name === "TypeError") return "refused";
+    return "missing";
+  }
+}
+
 export async function fileExists(dirHandle, path) {
   return !!(await getFileHandleAtPath(dirHandle, path));
 }

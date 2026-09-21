@@ -83,7 +83,7 @@ function renderSection({ title, hint, items, onLabel, offLabel, offSet, onChange
 
 /**
  * @param {object} args
- * @param {{ newFiles: string[], missingFiles: string[] }} args.result
+ * @param {{ newFiles: string[], missingFiles: string[], unreadable?: string[] }} args.result
  * @param {{ ignore?: string[], keep?: string[] }} args.choices  current choices
  * @param {string} args.sourceLabel  where the existing crate was read from
  * @param {Function} args.openModal
@@ -109,11 +109,26 @@ export function openReconcileModal({ result, choices = {}, sourceLabel = "the ex
           items: result.newFiles, onLabel: "Add", offLabel: "Ignore", offSet: ignore, onChange,
         }));
       }
-      if (result.missingFiles.length) {
+      // Two very different reasons an entity has no file behind it, and only
+      // one of them is a deletion. A name this browser refuses (a leading or
+      // trailing "~", a trailing "." or space, a Windows device name) is left
+      // out of the folder listing silently, so every file under such a folder
+      // looks deleted. Those are shown apart and start on Keep.
+      const unreadable = new Set(result.unreadable || []);
+      const missingGone = result.missingFiles.filter((id) => !unreadable.has(id));
+      const missingUnreadable = result.missingFiles.filter((id) => unreadable.has(id));
+      if (missingGone.length) {
         sections.push(renderSection({
           title: "Missing files",
           hint: "In the crate but no longer in the folder. A kept entity stays in the crate as it is; the build log will warn about it.",
-          items: result.missingFiles, onLabel: "Remove", offLabel: "Keep", offSet: keep, onChange,
+          items: missingGone, onLabel: "Remove", offLabel: "Keep", offSet: keep, onChange,
+        }));
+      }
+      if (missingUnreadable.length) {
+        sections.push(renderSection({
+          title: "Files this browser can't open",
+          hint: "In the crate, and the scan could not reach them — the browser refuses these names, so they are missing from the folder listing whether or not the files are still there. They are kept, not removed. To bring them back into the scan, rename the file or folder on disk: a leading or trailing \u201c~\u201d, a trailing \u201c.\u201d or space, and the Windows device names (CON, NUL, AUX\u2026) are all refused.",
+          items: missingUnreadable, onLabel: "Remove", offLabel: "Keep", offSet: keep, onChange,
         }));
       }
       body.append(...sections.map((s) => s.section));

@@ -158,6 +158,67 @@ export function reconcileFiles(json, filePaths, { isExcluded = () => false } = {
   return { matched, newFiles: newFiles.sort(byPathOrder), missingFiles: missingFiles.sort(byPathOrder) };
 }
 
+// Names the browser will not accept across the File System Access API, and so
+// will never list either (see fs_helpers probePath). Chromium's portable-name
+// filter: a leading or trailing "~", a trailing "." or space, the Windows
+// device names with or without an extension, and the path-relative names.
+const DEVICE_NAMES = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i;
+
+/** Would this one path segment be refused by the browser? */
+export function isRefusedName(name) {
+  const segment = String(name ?? "");
+  if (!segment || segment === "." || segment === "..") return true;
+  if (segment.startsWith("~") || segment.endsWith("~")) return true;
+  if (/[.\s]$/.test(segment)) return true;
+  return DEVICE_NAMES.test(segment);
+}
+
+/** The first segment of a path the browser would refuse, or null. */
+export function refusedSegment(path) {
+  for (const segment of String(path || "").split("/")) {
+    if (segment && isRefusedName(segment)) return segment;
+  }
+  return null;
+}
+
+/**
+ * Split missing entities into ones the folder really has lost and ones the
+ * scan was never able to see.
+ *
+ * A directory whose name the browser refuses is omitted from `entries()`
+ * silently, so every file under it looks deleted — which is how a single
+ * unreadable folder came to propose removing 100 perfectly good entities.
+ * These are not deletions and must not default to Remove.
+ *
+ * `probe` is optional and asked first (fs_helpers probePath, bound to the
+ * folder handle); without it the decision rests on the name alone, which is
+ * what the Node tests exercise.
+ *
+ * @param {string[]} missingFiles   entity @ids from reconcileFiles
+ * @param {{ probe?: (path: string) => Promise<string> }} [opts]
+ * @returns {Promise<{ gone: string[], unreadable: Array<{id: string, segment: string|null, reason: string}> }>}
+ */
+export async function partitionMissing(missingFiles, { probe = null } = {}) {
+  const gone = [];
+  const unreadable = [];
+  for (const id of asArray(missingFiles)) {
+    const path = safeDecode(id);
+    const segment = refusedSegment(path);
+    let reason = segment ? "refused" : "missing";
+    if (probe) {
+      const probed = await probe(path);
+      // Reachable by name but absent from the scan is also a blind spot, not a
+      // deletion — so only a clean "missing" verdict counts as gone.
+      if (probed === "refused") reason = "refused";
+      else if (probed === "ok") reason = "unlisted";
+      else if (probed === "missing" && !segment) reason = "missing";
+    }
+    if (reason === "missing") gone.push(id);
+    else unreadable.push({ id, segment: segment || null, reason });
+  }
+  return { gone, unreadable };
+}
+
 /**
  * The full decision lists for a reconcile result (SPEC.md §4.4a).
  *
@@ -176,8 +237,13 @@ export function resolveDecisions(result, choices = {}) {
   const ignore = asArray(choices?.ignore).filter((p) => newSet.has(p));
   const keep = asArray(choices?.keep).filter((id) => missingSet.has(id));
   const keepSet = new Set(keep);
+  // An entity the scan could never see is not a deletion: it is never removed
+  // by default, whatever the caller's choices leave unsaid.
+  for (const id of asArray(result?.unreadable)) if (missingSet.has(id)) keepSet.add(id);
   const remove = (result?.missingFiles || []).filter((id) => !keepSet.has(id));
-  return { ignore, keep, remove };
+  // Kept entities are warned about in the build log, and an unreadable one is
+  // exactly what a reader needs warning about, so it belongs in this list too.
+  return { ignore, keep: [...keepSet], remove };
 }
 
 /** Drop ignored files from a scan result (anything with a relativePath). */
