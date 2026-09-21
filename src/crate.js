@@ -242,7 +242,7 @@ export function buildCrate(filesWithMeta, config, log = () => {}, opts = {}) {
 
   const folderIds = structureFromMetadata
     ? new Map()
-    : emitFolderEntities(crate, files, topLevelFolderType, log, arcpPrefix);
+    : emitFolderEntities(crate, files, topLevelFolderType, log);
 
   let added = 0;
   let anyDuplicates = false;
@@ -388,7 +388,7 @@ function applyMetadataLicence(crate, cfg) {
 // RepositoryCollection with a child RepositoryObject per subfolder plus a
 // synthesised <Name>_Files object for the loose files (SPEC.md §6.1).
 // Returns folderPath -> entity @id for every folder that got an entity.
-function emitFolderEntities(crate, files, mode, log, arcpPrefix) {
+function emitFolderEntities(crate, files, mode, log) {
   const ids = new Map();
   const topLevels = new Map();
   for (const file of files) {
@@ -399,7 +399,8 @@ function emitFolderEntities(crate, files, mode, log, arcpPrefix) {
   }
 
   for (const [top, members] of topLevels) {
-    const topId = structuralId(crate, `#${top}`, arcpPrefix);
+    const topType = mode === "collection" ? "RepositoryCollection" : "RepositoryObject";
+    const topId = existingFolderEntity(crate, topType, top, null) || `#${top}`;
     if (mode === "collection") {
       crate.addEntity({ "@id": topId, "@type": "RepositoryCollection", name: top });
       ids.set(top, topId);
@@ -413,7 +414,8 @@ function emitFolderEntities(crate, files, mode, log, arcpPrefix) {
       }
       for (const path of subfolders) {
         const childName = path.split("/")[1];
-        const childId = structuralId(crate, `#${path.replace(/\//g, "_")}`, arcpPrefix);
+        const childId = existingFolderEntity(crate, "RepositoryObject", childName, topId)
+          || `#${path.replace(/\//g, "_")}`;
         crate.addEntity({
           "@id": childId,
           "@type": "RepositoryObject",
@@ -431,11 +433,12 @@ function emitFolderEntities(crate, files, mode, log, arcpPrefix) {
         }
       }
       if (hasLooseFiles) {
-        const filesId = structuralId(crate, `#${top}_Files`, arcpPrefix);
+        const filesName = `${top}_Files`;
+        const filesId = existingFolderEntity(crate, "RepositoryObject", filesName, topId) || `#${filesName}`;
         crate.addEntity({
           "@id": filesId,
           "@type": "RepositoryObject",
-          name: `${top}_Files`,
+          name: filesName,
           "pcdm:memberOf": { "@id": topId },
         });
         ids.set(top, filesId);
@@ -454,12 +457,28 @@ function emitFolderEntities(crate, files, mode, log, arcpPrefix) {
   return ids;
 }
 
-// A crate that has been through a build already holds its folder entities
-// under their rewritten arcp:// ids; reuse that id rather than minting a
-// second, #-prefixed entity for the same folder.
-function structuralId(crate, hashId, arcpPrefix) {
-  const arcpId = `${arcpPrefix}${hashId.slice(1)}`;
-  return crate.getEntity(arcpId) ? arcpId : hashId;
+// A folder's entity may already exist in the crate — from an earlier build by
+// this tool, or authored by an entirely different pipeline under its own
+// arcp:// namespace and its own local-path encoding (e.g. spaces sanitised to
+// underscores, where this tool's own ids keep them literal). Neither the
+// namespace nor the exact id string can be guessed, so folders are matched by
+// what both sides agree on: the entity's own name, its @type, and — for
+// anything but a top-level folder — its declared parent. A top-level match
+// additionally requires no pcdm:memberOf, so a nested object several folders
+// down that happens to share a name never gets mistaken for a top-level one.
+function existingFolderEntity(crate, expectedType, name, parentId) {
+  for (const entity of crate.getGraph()) {
+    if (!asArray(entity["@type"]).includes(expectedType)) continue;
+    if (asArray(entity.name)[0] !== name) continue;
+    const memberOf = asArray(entity["pcdm:memberOf"]).map(refId).filter(Boolean);
+    if (parentId) {
+      if (!memberOf.includes(parentId)) continue;
+    } else if (memberOf.length) {
+      continue;
+    }
+    return entity["@id"];
+  }
+  return null;
 }
 
 function addToRoot(crate, id) {
