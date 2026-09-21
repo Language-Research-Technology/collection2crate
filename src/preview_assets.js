@@ -56,9 +56,7 @@ export function isExternalReference(value) {
   );
 }
 
-/** Normalise a relative reference against the directory the page lives in. */
-export function resolveRelativePath(basePath, reference) {
-  const decoded = decodeURI(reference.split("#")[0].split("?")[0]);
+function normalizeAndJoin(basePath, decoded) {
   const parts = [
     ...String(basePath || "").split("/").filter(Boolean),
     ...decoded.split("/"),
@@ -70,6 +68,38 @@ export function resolveRelativePath(basePath, reference) {
     else stack.push(part);
   }
   return stack.join("/");
+}
+
+/** Normalise a relative reference against the directory the page lives in. */
+export function resolveRelativePath(basePath, reference) {
+  return normalizeAndJoin(basePath, decodeURI(reference.split("#")[0].split("?")[0]));
+}
+
+// Like resolveRelativePath, but keeps a literal '#'/'?' in the reference as
+// part of the path rather than treating it as a fragment/query delimiter —
+// crate filenames can contain either character (e.g. "115D#J~Y.PDF"), so a
+// real file whose name has one must still be found. Only used via
+// resolveFileHandle below, which tries this first and falls back to the
+// fragment/query-stripping behaviour above when the literal path isn't a
+// real file — that keeps a genuine fragment (e.g. "#top") or query string
+// working exactly as before for everything that isn't a filename collision.
+function resolveRelativePathLiteral(basePath, reference) {
+  return normalizeAndJoin(basePath, decodeURI(reference));
+}
+
+/**
+ * Resolve `reference` (against `basePath`) to the file it names, trying the
+ * literal reference first and only falling back to stripping a '#'/'?'
+ * suffix when that literal path isn't a real file in `dirHandle`. Returns
+ * { handle, path } — handle is null when neither resolves to a file.
+ */
+async function resolveFileHandle(dirHandle, basePath, reference) {
+  const literalPath = resolveRelativePathLiteral(basePath, reference);
+  const literalHandle = await getFileHandleAtPath(dirHandle, literalPath);
+  if (literalHandle) return { handle: literalHandle, path: literalPath };
+  const path = resolveRelativePath(basePath, reference);
+  const handle = await getFileHandleAtPath(dirHandle, path);
+  return { handle, path };
 }
 
 /**
@@ -84,8 +114,7 @@ export async function buildPreviewBlobUrl(dirHandle, htmlPath = "ro-crate-previe
 
   const assetUrl = async (reference) => {
     if (isExternalReference(reference)) return null;
-    const path = resolveRelativePath(baseDir, reference);
-    const handle = await getFileHandleAtPath(dirHandle, path);
+    const { handle, path } = await resolveFileHandle(dirHandle, baseDir, reference);
     if (!handle) return null;
     const file = await handle.getFile();
     if (/\.css$/i.test(path)) {
@@ -105,11 +134,10 @@ export async function buildPreviewBlobUrl(dirHandle, htmlPath = "ro-crate-previe
 
   const rewritten = await replaceAsync(source, ATTRIBUTE_PATTERN, async (match, attr, quote, value) => {
     if (isExternalReference(value)) return match;
-    const path = resolveRelativePath(baseDir, value);
+    const { handle, path } = await resolveFileHandle(dirHandle, baseDir, value);
     // A link to another preview page keeps its human-readable path and is
     // resolved on click; everything else is inlined as a blob now.
     if (attr.toLowerCase() === "href" && isPagePath(path)) {
-      const handle = await getFileHandleAtPath(dirHandle, path);
       if (handle) return `${attr}=${quote}#${quote} ${PAGE_LINK_ATTRIBUTE}=${quote}${path}${quote}`;
       return match;
     }
@@ -136,7 +164,7 @@ export async function buildPreviewBlobUrl(dirHandle, htmlPath = "ro-crate-previe
 export async function rewriteCssUrls(cssText, cssDir, dirHandle, created) {
   return await replaceAsync(cssText, CSS_URL_PATTERN, async (match, quote, value) => {
     if (isExternalReference(value)) return match;
-    const handle = await getFileHandleAtPath(dirHandle, resolveRelativePath(cssDir, value));
+    const { handle } = await resolveFileHandle(dirHandle, cssDir, value);
     if (!handle) return match;
     const url = URL.createObjectURL(await handle.getFile());
     created.push(url);
