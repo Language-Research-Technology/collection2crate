@@ -15,7 +15,7 @@ import {
 } from "./crate.js";
 import {
   walkDirectory, verifyPermission, fileExists, statFile,
-  writeFile, removePath, backupFile, getFileHandleAtPath,
+  writeFile, removePath, backupFile, getFileHandleAtPath, probePath,
 } from "./fs_helpers.js";
 import { listGitHubFolder } from "./github.js";
 import {
@@ -26,6 +26,7 @@ import { loadDefaultProfile, DEFAULT_PROFILE_NAME } from "./default_profile.js";
 import { openModal, closeAllModals } from "./ui_helpers.js";
 import {
   loadExistingCrate, reconcileFiles, resolveDecisions, withoutIgnored, seedFromExisting,
+  partitionMissing,
 } from "./existing_crate.js";
 import {
   createWorkingCrate, rootFieldText, rootFormValues, rootPropertiesForFields, applyFieldText,
@@ -1085,6 +1086,7 @@ async function pickFolder() {
   state.working = null;
   state.crateSourceLabel = "";
   state.reconcile = null;
+  state.refusedMissing = new Map();
   state.fileChoices = { ignore: [], keep: [] };
   state.hasBuilt = false;
   closeAllModals();
@@ -1149,6 +1151,9 @@ async function emitFolderPicked() {
   log(`Existing crate: ${state.crateSourceLabel}.`, "ok");
 
   recomputeReconcile();
+  await noteUnreadableMissing();
+  if (generation !== state.generation) return;
+  recomputeReconcile();
   const { newFiles, missingFiles } = state.reconcile;
   if (newFiles.length || missingFiles.length) {
     log(`${newFiles.length} new file(s) and ${missingFiles.length} missing file(s) compared with the existing crate.`, "info");
@@ -1195,6 +1200,46 @@ function recomputeReconcile() {
   state.reconcile = state.working?.onDisk
     ? reconcileFiles(state.working.toJSON(), state.allFiles.map((f) => f.relativePath), { isExcluded: isScanExcluded })
     : null;
+  if (!state.reconcile) return;
+  // Verdicts are cached per folder (probing is a round trip per path), and
+  // re-applied here because every recompute builds a fresh result object.
+  const refused = state.refusedMissing;
+  if (!refused?.size) return;
+  state.reconcile.unreadable = state.reconcile.missingFiles.filter((id) => refused.has(id));
+}
+
+/**
+ * Ask the browser whether each missing entity's path is even nameable.
+ *
+ * A folder whose name the API refuses never appears in a directory listing, so
+ * the scan cannot see it and everything under it reads as deleted. Those
+ * entities are recorded here so the prompt can show them apart and keep them,
+ * rather than offering to remove files that are sitting on disk untouched.
+ */
+async function noteUnreadableMissing() {
+  state.refusedMissing = new Map();
+  const missing = state.reconcile?.missingFiles || [];
+  if (!missing.length || !state.dirHandle) return;
+  const { unreadable } = await partitionMissing(missing, {
+    probe: (path) => probePath(state.dirHandle, path),
+  });
+  if (!unreadable.length) return;
+  for (const entry of unreadable) state.refusedMissing.set(entry.id, entry.segment);
+  const names = [...new Set(unreadable.map((u) => u.segment).filter(Boolean))];
+  const named = names.length
+    ? ` under ${names.slice(0, 3).map((n) => `"${n}"`).join(", ")}${names.length > 3 ? ` and ${names.length - 3} more` : ""}`
+    : "";
+  log(
+    `${unreadable.length} file(s) in the crate could not be reached by the scan${named} — ` +
+    "this browser refuses those names, so they are missing from the folder listing whether or not " +
+    "the files are still there. They are kept, not removed.",
+    "warn"
+  );
+  log(
+    "To bring them back into the scan, rename them on disk: a leading or trailing \u201c~\u201d, " +
+    "a trailing \u201c.\u201d or space, and the Windows device names (CON, NUL, AUX\u2026) are all refused.",
+    "muted"
+  );
 }
 
 /** An edit was made to the working crate in place. */
