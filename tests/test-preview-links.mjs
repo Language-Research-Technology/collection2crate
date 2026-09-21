@@ -110,7 +110,33 @@ function fakeFolder(files) {
   );
 }
 
+{
+  // A crate filename can itself contain '#' or '?' (e.g. "115D#J~Y.PDF") —
+  // resolveRelativePath alone would treat everything from the first '#'/'?'
+  // as a fragment/query and strip it, so the file would never be found.
+  // buildPreviewBlobUrl must still resolve the literal filename first.
+  const folder = fakeFolder({
+    "ro-crate-preview.html": `<html><body>
+      <a href="115D#J~Y.PDF">A scan</a>
+      <img src="media/pic?ref.jpg">
+    </body></html>`,
+    "115D#J~Y.PDF": "PDFDATA",
+    "media/pic?ref.jpg": "JPEGDATA",
+  });
+
+  const { url, revoke } = await buildPreviewBlobUrl(folder, "ro-crate-preview.html");
+  const html = await (await fetch(url)).text();
+
+  assert.match(html, /<a href="blob:[^"]*">A scan<\/a>/,
+    "a filename containing a literal '#' still resolves to its own blob rather than being left as a broken link");
+  assert.match(html, /<img src="blob:/,
+    "a filename containing a literal '?' still resolves to its own blob");
+
+  revoke();
+}
+
 console.log(
   "test-preview-links: all tests passed (path resolution, external references, asset inlining, " +
-  "page links marked for click-time resolution, script injected once and only when needed)"
+  "page links marked for click-time resolution, script injected once and only when needed, " +
+  "filenames containing '#'/'?' resolved literally)"
 );
