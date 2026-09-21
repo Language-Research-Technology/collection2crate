@@ -189,6 +189,42 @@ const ids = (value) => [].concat(value ?? []).map((v) => (v && typeof v === "obj
     "Reconciling does not duplicate the file entities it already had");
 }
 
+/* ---------- arcp:// namespace follows an existing crate, not a hardcoded default ---------- */
+
+{
+  // A crate authored elsewhere (not by this tool), with its RepositoryObject
+  // already minted under the collection's own namespace rather than "corpus".
+  const FOREIGN_NAMESPACE = "2026-ldaca-community-workshops-gooreng-gooreng";
+  const existingJson = {
+    "@context": ["https://w3id.org/ro/crate/1.1/context"],
+    "@graph": [
+      { "@id": "ro-crate-metadata.json", "@type": "CreativeWork", about: { "@id": "./" } },
+      { "@id": "./", "@type": "Dataset", name: "Test collection", hasPart: [{ "@id": `arcp://name,${FOREIGN_NAMESPACE}/Dyirbal` }] },
+      {
+        "@id": `arcp://name,${FOREIGN_NAMESPACE}/Dyirbal`,
+        "@type": "RepositoryObject",
+        name: "Dyirbal",
+        hasPart: [{ "@id": "Dyirbal/notes.txt" }],
+      },
+      { "@id": "Dyirbal/notes.txt", "@type": "File", name: "notes.txt", isPartOf: [{ "@id": `arcp://name,${FOREIGN_NAMESPACE}/Dyirbal` }] },
+    ],
+  };
+
+  const crate = buildCrate(buildFileMetadata(FILES), TEST_CONFIG, noLog, { existingJson });
+
+  assert.ok(crate.getEntity(`arcp://name,${FOREIGN_NAMESPACE}/Dyirbal`),
+    "The folder entity the existing crate already had, under its own namespace, is reused");
+  assert.equal(byId(crate, "arcp://name,corpus/Dyirbal"), undefined,
+    "No duplicate 'Dyirbal' entity is minted under this tool's default namespace");
+  assert.ok(ids(byId(crate, "Dyirbal/audio/song.wav").isPartOf).includes(`arcp://name,${FOREIGN_NAMESPACE}/Dyirbal`),
+    "A newly-scanned file under the same folder links to the reused, foreign-namespaced entity");
+
+  assert.ok(byId(crate, `arcp://name,${FOREIGN_NAMESPACE}/Warlpiri`),
+    "A brand-new top-level folder is minted under the namespace the existing crate already uses, not 'corpus'");
+  assert.equal(byId(crate, "arcp://name,corpus/Warlpiri"), undefined,
+    "The default namespace is never used once the crate has adopted another one");
+}
+
 /* ---------- language entities ---------- */
 
 {
@@ -279,6 +315,6 @@ const ids = (value) => [].concat(value ?? []).map((v) => (v && typeof v === "obj
 
 console.log(
   "test-crate: all tests passed (file metadata + duplicates, object and collection modes, " +
-  "profile file properties, structureFromMetadata, existing-crate reconcile, language entities, " +
-  "type counts, and all three real outputs)"
+  "profile file properties, structureFromMetadata, existing-crate reconcile, arcp:// namespace " +
+  "adoption, language entities, type counts, and all three real outputs)"
 );

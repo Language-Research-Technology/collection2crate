@@ -56,7 +56,35 @@ export const STRUCTURAL_TYPES = new Set([
   "RepositoryCollection",
 ]);
 
-const ARCP_PREFIX = "arcp://name,corpus/";
+// Fallback only: a crate with no arcp:// structural entities yet (a fresh
+// build, or one never built by this tool) gets this literal namespace, per
+// SPEC.md §14. A crate that already HAS RepositoryObject/RepositoryCollection
+// entities under some other arcp:// namespace — built by this tool before, or
+// authored by a different pipeline entirely — keeps that namespace instead
+// (detectArcpNamespace()), so a later build never mints a second, differently
+// namespaced twin of a folder the crate already describes.
+const DEFAULT_ARCP_NAMESPACE = "corpus";
+
+/**
+ * The arcp:// namespace already in use by this crate's structural entities,
+ * or null if none exists yet (a fresh crate, or one with no arcp:// ids at
+ * all). "custom" is the fixed namespace CRATE_CONTEXT reserves for property
+ * definitions (arcp://name,custom/terms#…) and is never a folder namespace.
+ */
+export function detectArcpNamespace(crate) {
+  const counts = new Map();
+  for (const entity of crate.getGraph()) {
+    const id = entity["@id"];
+    if (typeof id !== "string") continue;
+    const match = /^arcp:\/\/name,([^/]+)\//.exec(id);
+    if (!match || match[1] === "custom") continue;
+    const types = asArray(entity["@type"]);
+    if (!types.some((t) => t === "RepositoryObject" || t === "RepositoryCollection")) continue;
+    counts.set(match[1], (counts.get(match[1]) || 0) + 1);
+  }
+  if (!counts.size) return null;
+  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+}
 
 // ---------------------------------------------------------------------------
 // File metadata
@@ -196,6 +224,9 @@ export function buildCrate(filesWithMeta, config, log = () => {}, opts = {}) {
       : new ROCrate({ array: true, link: true }));
   ensureCrateContext(crate);
 
+  const arcpNamespace = detectArcpNamespace(crate) || DEFAULT_ARCP_NAMESPACE;
+  const arcpPrefix = `arcp://name,${arcpNamespace}/`;
+
   applyRootDataset(crate, cfg, log);
   applyMetadataLicence(crate, cfg);
 
@@ -211,7 +242,7 @@ export function buildCrate(filesWithMeta, config, log = () => {}, opts = {}) {
 
   const folderIds = structureFromMetadata
     ? new Map()
-    : emitFolderEntities(crate, files, topLevelFolderType, log);
+    : emitFolderEntities(crate, files, topLevelFolderType, log, arcpPrefix);
 
   let added = 0;
   let anyDuplicates = false;
@@ -257,7 +288,7 @@ export function buildCrate(filesWithMeta, config, log = () => {}, opts = {}) {
 
   log(`Crate assembled: ${added} new file entity(ies), ${crate.getGraph().length} entity(ies) total.`, "ok");
 
-  rewriteStructuralIds(crate);
+  rewriteStructuralIds(crate, arcpPrefix);
   return crate;
 }
 
@@ -357,7 +388,7 @@ function applyMetadataLicence(crate, cfg) {
 // RepositoryCollection with a child RepositoryObject per subfolder plus a
 // synthesised <Name>_Files object for the loose files (SPEC.md §6.1).
 // Returns folderPath -> entity @id for every folder that got an entity.
-function emitFolderEntities(crate, files, mode, log) {
+function emitFolderEntities(crate, files, mode, log, arcpPrefix) {
   const ids = new Map();
   const topLevels = new Map();
   for (const file of files) {
@@ -368,7 +399,7 @@ function emitFolderEntities(crate, files, mode, log) {
   }
 
   for (const [top, members] of topLevels) {
-    const topId = structuralId(crate, `#${top}`);
+    const topId = structuralId(crate, `#${top}`, arcpPrefix);
     if (mode === "collection") {
       crate.addEntity({ "@id": topId, "@type": "RepositoryCollection", name: top });
       ids.set(top, topId);
@@ -382,7 +413,7 @@ function emitFolderEntities(crate, files, mode, log) {
       }
       for (const path of subfolders) {
         const childName = path.split("/")[1];
-        const childId = structuralId(crate, `#${path.replace(/\//g, "_")}`);
+        const childId = structuralId(crate, `#${path.replace(/\//g, "_")}`, arcpPrefix);
         crate.addEntity({
           "@id": childId,
           "@type": "RepositoryObject",
@@ -400,7 +431,7 @@ function emitFolderEntities(crate, files, mode, log) {
         }
       }
       if (hasLooseFiles) {
-        const filesId = structuralId(crate, `#${top}_Files`);
+        const filesId = structuralId(crate, `#${top}_Files`, arcpPrefix);
         crate.addEntity({
           "@id": filesId,
           "@type": "RepositoryObject",
@@ -426,8 +457,8 @@ function emitFolderEntities(crate, files, mode, log) {
 // A crate that has been through a build already holds its folder entities
 // under their rewritten arcp:// ids; reuse that id rather than minting a
 // second, #-prefixed entity for the same folder.
-function structuralId(crate, hashId) {
-  const arcpId = `${ARCP_PREFIX}${hashId.slice(1)}`;
+function structuralId(crate, hashId, arcpPrefix) {
+  const arcpId = `${arcpPrefix}${hashId.slice(1)}`;
   return crate.getEntity(arcpId) ? arcpId : hashId;
 }
 
@@ -456,14 +487,14 @@ function linkFileToParent(crate, fileId, parentId) {
 // Structural hash ids (#Dyirbal) are fine inside the graph but are not
 // absolute, so they are rewritten to arcp:// form (SPEC.md §14) before the
 // crate leaves this module.
-export function rewriteStructuralIds(crate) {
+export function rewriteStructuralIds(crate, arcpPrefix = `arcp://name,${DEFAULT_ARCP_NAMESPACE}/`) {
   const renames = [];
   for (const entity of crate.getGraph()) {
     const id = entity["@id"];
     if (typeof id !== "string" || !id.startsWith("#")) continue;
     const types = asArray(entity["@type"]);
     if (!types.some((t) => t === "RepositoryObject" || t === "RepositoryCollection")) continue;
-    renames.push([id, `${ARCP_PREFIX}${id.slice(1)}`]);
+    renames.push([id, `${arcpPrefix}${id.slice(1)}`]);
   }
   for (const [from, to] of renames) {
     if (crate.getEntity(to)) continue;
