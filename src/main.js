@@ -717,7 +717,18 @@ async function openMappingBuilder(node) {
 
   const existing = state.options.mergeConfigUpload
     ? JSON.parse(await state.options.mergeConfigUpload.file.text())
-    : { map: {} };
+    : {};
+
+  // Pre-fill from either config shape: the canonical "mapping" array that the
+  // merge plugin reads, or the "map" object earlier builds of this dialog wrote.
+  const existingByHeader = {};
+  if (Array.isArray(existing.mapping)) {
+    for (const entry of existing.mapping) {
+      if (entry?.source) existingByHeader[entry.source] = { property: entry.target || "", type: entry.type || "Text" };
+    }
+  } else if (existing.map && typeof existing.map === "object") {
+    Object.assign(existingByHeader, existing.map);
+  }
 
   const form = document.createElement("div");
   const rows = headers.map((header) => {
@@ -729,7 +740,7 @@ async function openMappingBuilder(node) {
     const property = document.createElement("input");
     property.type = "text";
     property.placeholder = "target property";
-    property.value = existing.map?.[header]?.property || "";
+    property.value = existingByHeader[header]?.property || "";
     const type = document.createElement("select");
     for (const option of ["Text", "Date", "URL", "Place", "Person", "Organization"]) {
       const element = document.createElement("option");
@@ -737,7 +748,7 @@ async function openMappingBuilder(node) {
       element.textContent = option;
       type.append(element);
     }
-    type.value = existing.map?.[header]?.type || "Text";
+    type.value = existingByHeader[header]?.type || "Text";
     row.append(name, property, type);
     form.append(row);
     return { header, property, type };
@@ -749,12 +760,18 @@ async function openMappingBuilder(node) {
     actions: [
       { label: "Cancel", value: null },
       { label: "Use this mapping", primary: true, value: () => {
-        const map = {};
+        // Emit the shape mergeXlsxIntoCrate reads: a "mapping" array of
+        // {source, target, type}. A bare "Text" type means no special
+        // handling, and is left off so it doesn't generate linked entities.
+        const mapping = [];
         for (const row of rows) {
           const property = row.property.value.trim();
-          if (property) map[row.header] = { property, type: row.type.value };
+          if (!property) continue;
+          const type = row.type.value;
+          mapping.push({ source: row.header, target: property, ...(type && type !== "Text" ? { type } : {}) });
         }
-        return { ...existing, map };
+        const { map: _legacyMap, ...rest } = existing;
+        return { ...rest, mapping };
       } },
     ],
   });
@@ -766,8 +783,8 @@ async function openMappingBuilder(node) {
     name: "merge-config.json (built here)",
     file: new File([text], "merge-config.json", { type: "application/json" }),
   };
-  state.options[node.key] = `${Object.keys(result.map).length} column(s) mapped`;
-  log(`Merge mapping set for ${Object.keys(result.map).length} column(s).`, "ok");
+  state.options[node.key] = `${result.mapping.length} column(s) mapped`;
+  log(`Merge mapping set for ${result.mapping.length} column(s).`, "ok");
 }
 
 // Menu names and order for the generated HTML. Affects the preview only —
