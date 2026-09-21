@@ -56,13 +56,35 @@ export function isExternalReference(value) {
   );
 }
 
-function normalizeAndJoin(basePath, decoded) {
-  const parts = [
+// The renderer percent-encodes the references it writes, and decodeURI
+// deliberately leaves the URI-reserved characters encoded — decodeURI("%23")
+// is "%23", not "#". So a file whose name contains one of those characters
+// (e.g. "115D#J~Y.PDF", written as "115D%23J~Y.PDF") could never be found on
+// disk: the literal path kept the "%23" and the fragment-stripping fallback
+// found no "#" to strip. Decoding one path segment at a time with
+// decodeURIComponent is what turns those back into the real filename. A
+// "%2F" inside a segment decodes to a separator, which is what the renderer
+// meant by it (see fixEncodedSlashes in crate.js) and cannot be part of a
+// filename anyway, so the decoded segment is split again.
+function decodeSegments(reference) {
+  return String(reference ?? "").split("/").flatMap((part) => {
+    let decoded = part;
+    try {
+      decoded = decodeURIComponent(part);
+    } catch {
+      // A stray '%' that isn't an escape sequence: keep the segment as it is.
+    }
+    return decoded.split("/");
+  });
+}
+
+function normalizeAndJoin(basePath, parts) {
+  const all = [
     ...String(basePath || "").split("/").filter(Boolean),
-    ...decoded.split("/"),
+    ...parts,
   ];
   const stack = [];
-  for (const part of parts) {
+  for (const part of all) {
     if (!part || part === ".") continue;
     if (part === "..") stack.pop();
     else stack.push(part);
@@ -72,7 +94,7 @@ function normalizeAndJoin(basePath, decoded) {
 
 /** Normalise a relative reference against the directory the page lives in. */
 export function resolveRelativePath(basePath, reference) {
-  return normalizeAndJoin(basePath, decodeURI(reference.split("#")[0].split("?")[0]));
+  return normalizeAndJoin(basePath, decodeSegments(reference.split("#")[0].split("?")[0]));
 }
 
 // Like resolveRelativePath, but keeps a literal '#'/'?' in the reference as
@@ -84,7 +106,7 @@ export function resolveRelativePath(basePath, reference) {
 // real file — that keeps a genuine fragment (e.g. "#top") or query string
 // working exactly as before for everything that isn't a filename collision.
 function resolveRelativePathLiteral(basePath, reference) {
-  return normalizeAndJoin(basePath, decodeURI(reference));
+  return normalizeAndJoin(basePath, decodeSegments(reference));
 }
 
 /**

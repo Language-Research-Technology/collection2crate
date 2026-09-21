@@ -135,8 +135,64 @@ function fakeFolder(files) {
   revoke();
 }
 
+{
+  // What the renderer actually emits is percent-encoded, and decodeURI leaves
+  // the URI-reserved characters alone — decodeURI("%23") is "%23" — so a name
+  // with a '#' in it resolved to neither the literal path nor a stripped one,
+  // and the preview left a broken relative href inside a blob: page ("file
+  // not found"). Every reference is decoded a segment at a time instead.
+  const folder = fakeFolder({
+    "ro-crate-preview.html": `<html><body>
+      <a href="CTK%20-%20All%20Documents/115D%23J~Y.PDF">A scan</a>
+      <img src="media/pic%3Fref.jpg">
+      <a href="100%.pdf">Stray percent</a>
+      <a href="notes.html%23top">Encoded hash on a page name</a>
+    </body></html>`,
+    "CTK - All Documents/115D#J~Y.PDF": "PDFDATA",
+    "media/pic?ref.jpg": "JPEGDATA",
+    "100%.pdf": "PCTDATA",
+    "notes.html#top": "HASHPAGE",
+  });
+
+  const { url, revoke } = await buildPreviewBlobUrl(folder, "ro-crate-preview.html");
+  const html = await (await fetch(url)).text();
+
+  assert.match(html, /<a href="blob:[^"]*">A scan<\/a>/,
+    "a percent-encoded '#' in a filename, in a percent-encoded folder, resolves to its own blob");
+  assert.match(html, /<img src="blob:/,
+    "a percent-encoded '?' in a filename resolves too");
+  assert.match(html, /<a href="blob:[^"]*">Stray percent<\/a>/,
+    "a '%' that is not an escape sequence is kept as itself rather than throwing");
+  assert.ok(!html.includes("%23J~Y.PDF"), "no reference is left percent-encoded and broken");
+
+  revoke();
+}
+
+{
+  // A '%2F' means the separator the renderer encoded, on every attribute —
+  // fixEncodedSlashes in crate.js only ever rewrote href.
+  const folder = fakeFolder({
+    "ro-crate-preview.html": `<html><body><img src="media%2Fdeep%2Fpic.jpg"></body></html>`,
+    "media/deep/pic.jpg": "JPEGDATA",
+  });
+  const { url, revoke } = await buildPreviewBlobUrl(folder, "ro-crate-preview.html");
+  assert.match(await (await fetch(url)).text(), /<img src="blob:/,
+    "a percent-encoded separator in src resolves, not just in href");
+  revoke();
+}
+
+{
+  // A real fragment and a real query are still stripped, which is what makes
+  // the literal-first order safe.
+  assert.equal(resolveRelativePath("", "page.html#top"), "page.html");
+  assert.equal(resolveRelativePath("", "a.pdf?v=2"), "a.pdf");
+  assert.equal(resolveRelativePath("", "115D%23J~Y.PDF"), "115D#J~Y.PDF");
+  assert.equal(resolveRelativePath("base", "../x/y%2Fz.pdf"), "x/y/z.pdf");
+  assert.equal(resolveRelativePath("", "100%.pdf"), "100%.pdf");
+}
+
 console.log(
   "test-preview-links: all tests passed (path resolution, external references, asset inlining, " +
   "page links marked for click-time resolution, script injected once and only when needed, " +
-  "filenames containing '#'/'?' resolved literally)"
+  "filenames containing '#'/'?' resolved literally and percent-encoded)"
 );
