@@ -356,9 +356,27 @@ const ids = (value) => [].concat(value ?? []).map((v) => (v && typeof v === "obj
   );
 }
 
+{
+  // Many files in one folder. Linking each file used to reassign its parent's
+  // whole hasPart array, and ro-crate re-links every value on assignment, so
+  // the cost grew faster than n² — ~2,700 files (COOEE) hung the browser tab.
+  // Appending keeps it roughly linear; the bound is generous, the old code
+  // took over a minute at this size.
+  const n = 3000;
+  const many = buildFileMetadata(
+    Array.from({ length: n }, (_, i) => ({ name: `f${i}.txt`, relativePath: `data/f${i}.txt`, size: 1 }))
+  );
+  const started = Date.now();
+  const crate = buildCrate(many, TEST_CONFIG, () => {}, { topLevelFolderType: "object" });
+  const elapsed = Date.now() - started;
+  const folder = crate.getGraph().find((e) => [].concat(e["@type"]).includes("RepositoryObject"));
+  assert.equal([].concat(folder.hasPart).length, n, "Every file is linked into its folder exactly once");
+  assert.ok(elapsed < 10000, `Linking ${n} files into one folder stays fast (took ${elapsed} ms)`);
+}
+
 console.log(
   "test-crate: all tests passed (file metadata + duplicates, object and collection modes, " +
   "profile file properties, structureFromMetadata, existing-crate reconcile, arcp:// namespace " +
   "adoption, folder matching by name across a differently-encoded existing id, language entities, " +
-  "type counts, and all three real outputs)"
+  "type counts, many files in one folder, and all three real outputs)"
 );
