@@ -490,7 +490,10 @@ function pushRef(crate, ownerId, property, targetId) {
   if (!owner) return;
   const current = asArray(owner[property]).map(refId).filter(Boolean);
   if (current.includes(targetId)) return;
-  owner[property] = [...asArray(owner[property]), { "@id": targetId }];
+  // Append in place. Reassigning the whole array makes ro-crate re-link every
+  // existing value, so linking n files to one parent was O(n²)+ and hung the
+  // tab on large collections (COOEE: ~2,700 files in one folder).
+  crate.addValues(owner, property, { "@id": targetId });
 }
 
 function linkFileToParent(crate, fileId, parentId) {
