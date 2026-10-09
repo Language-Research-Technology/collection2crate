@@ -2362,7 +2362,7 @@ function renderPanel() {
     return;
   }
   try {
-    panel.render(host, { documents: visData.documents, tables: visData.tables, log });
+    panel.render(host, { documents: visData.documents, tables: visData.tables, dirHandle: state.dirHandle, log });
   } catch (e) {
     // A panel that throws takes the page down with it otherwise — and the
     // panel is a plugin, so this is somebody else's bug to see, not to hide.
