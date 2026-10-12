@@ -587,6 +587,19 @@ This is the "I just want an RO-Crate" path: something valid to publish and somet
 
 **Why bundled rather than fetched.** A fallback that can fail to load is not a fallback. The default's two JSON files are imported from the `ro-crate-masp` dependency at build time, so it works offline, survives a GitHub rate-limit, and can't 404. The profile crate is ~1.6 MB (~261 kB gzipped), so it is dynamically imported into its own chunk — the same treatment the AUSTLANG data pack gets, and it is only downloaded when a build actually runs without a chosen profile.
 
+### 5.1a An existing crate picks its own profile
+
+A crate built here carries its profile's `rootDataset.conformsTo` on the root dataset, so a folder that already holds one says which profile it was made with. When a folder is picked and its existing crate (§4.4a) declares a `conformsTo`, `selectProfileForExistingCrate()` in `main.js` looks that URI up against every repository profile's mode file and acts on the answer from `chooseProfileForCrate()` in `masp.js`:
+
+| Match | What happens |
+|---|---|
+| exactly one profile, not the active one | that profile is fetched and selected; the log says why |
+| the active profile is among the matches | nothing — it already fits |
+| several profiles, none active | nothing, and the log names the candidates. `ldac` and `language-resources` both declare `https://w3id.org/ldac/profile#Collection`; guessing between them would be wrong half the time |
+| none, no `conformsTo`, or the repository unreachable | the active profile stays |
+
+The index is built from the mode files alone — raw fetches, so no API quota — once per page, on the first folder whose crate declares a `conformsTo`. A failed build of it is not kept, so the next folder retries. The bundled default declares no `conformsTo` and so is never matched; it is simply what stays in effect.
+
 ### 5.2 What a profile ships
 
 Profiles come from two places: the **profile repository** (`Language-Research-Technology/c2c-masp-profiles`), fetched when the user picks one, and the **bundled default** (§5.1), compiled in from the `ro-crate-masp` dependency. Both have the same shape — a folder containing:

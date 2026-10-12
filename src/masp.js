@@ -458,22 +458,106 @@ export async function fetchProfile(
   } = {}
 ) {
   const paths = profileFilePaths(profileName);
-  const profileJson = await fetchGitHubJsonFile(owner, repo, ref, paths.profileCrate);
+  const [profileJson, modeJson] = await Promise.all([
+    fetchGitHubJsonFile(owner, repo, ref, paths.profileCrate),
+    fetchModeFile(profileName, { owner, repo, ref }),
+  ]);
+  return { profileJson, modeJson, name: profileName, source: "repository" };
+}
 
-  let modeJson = null;
+/** One profile's mode file, under whichever of its known names it has. */
+export async function fetchModeFile(
+  profileName,
+  {
+    owner = MASP_PROFILES_REPO_OWNER,
+    repo = MASP_PROFILES_REPO_NAME,
+    ref = MASP_PROFILES_REPO_REF,
+  } = {}
+) {
   let lastError = null;
-  for (const candidate of paths.modeFiles) {
+  for (const candidate of profileFilePaths(profileName).modeFiles) {
     try {
-      modeJson = await fetchGitHubJsonFile(owner, repo, ref, candidate);
-      break;
+      return await fetchGitHubJsonFile(owner, repo, ref, candidate);
     } catch (e) {
       lastError = e;
     }
   }
-  if (!modeJson) {
-    throw new Error(
-      `Profile "${profileName}" has no mode file (tried ${MODE_FILE_NAMES.join(", ")}): ${lastError?.message}`
-    );
-  }
-  return { profileJson, modeJson, name: profileName, source: "repository" };
+  throw new Error(
+    `Profile "${profileName}" has no mode file (tried ${MODE_FILE_NAMES.join(", ")}): ${lastError?.message}`
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Matching an existing crate to a profile
+// ---------------------------------------------------------------------------
+
+// conformsTo arrives as a bare string from a mode file and as `{ "@id" }`
+// (or an array of either) from a crate, so both are read as a list of URIs.
+const conformanceIds = (value) =>
+  [].concat(value ?? [])
+    .map((v) => (v && typeof v === "object" ? v["@id"] : v))
+    .filter((v) => typeof v === "string" && v.trim())
+    .map((v) => v.trim());
+
+/** The conformance URIs a profile writes onto the root dataset. */
+export function profileConformsTo(modeJson) {
+  return conformanceIds(modeJson?.rootDataset?.conformsTo);
+}
+
+/** The conformance URIs on a crate's root dataset. */
+export function crateConformsTo(json) {
+  const graph = json?.["@graph"] || [];
+  const descriptor = graph.find((e) => e?.["@id"] === "ro-crate-metadata.json");
+  const rootId = conformanceIds(descriptor?.about)[0] || "./";
+  const root = graph.find((e) => e?.["@id"] === rootId);
+  return conformanceIds(root?.conformsTo);
+}
+
+/**
+ * Each repository profile's conformance URIs, for matching a crate back to
+ * the profile that built it. Mode files are raw fetches, so this costs no API
+ * quota; a profile whose mode file won't load is left out, not fatal.
+ *
+ * @param {string[]} names  profile folder names (listProfiles())
+ * @param {(name: string) => Promise<object>} [fetchMode]  injectable for tests
+ * @returns {Promise<Array<{ name: string, conformsTo: string[] }>>}
+ */
+export async function buildConformanceIndex(names, fetchMode = fetchModeFile) {
+  const entries = await Promise.all(
+    (names || []).map(async (name) => {
+      try {
+        return { name, conformsTo: profileConformsTo(await fetchMode(name)) };
+      } catch {
+        return null;
+      }
+    })
+  );
+  return entries.filter((entry) => entry?.conformsTo.length);
+}
+
+/**
+ * Which profile an existing crate should be opened with (SPEC.md §5.1a).
+ *
+ * Only a single unambiguous match switches profile. More than one profile can
+ * declare the same URI (ldac and language-resources both conform to the LDaC
+ * Collection profile), and guessing between them would be wrong half the
+ * time — so an ambiguous match is reported, not acted on, unless the active
+ * profile is already one of the candidates.
+ *
+ * @param {object|null} crateJson
+ * @param {Array<{ name: string, conformsTo: string[] }>} index
+ * @param {string|null} [activeName]  the profile in effect now
+ * @returns {{ choice: "none"|"active"|"switch"|"ambiguous", name: string|null,
+ *   matches: string[], conformsTo: string[] }}
+ */
+export function chooseProfileForCrate(crateJson, index, activeName = null) {
+  const conformsTo = crateConformsTo(crateJson);
+  const declared = new Set(conformsTo);
+  const matches = (index || [])
+    .filter((entry) => entry.conformsTo.some((uri) => declared.has(uri)))
+    .map((entry) => entry.name);
+  if (!matches.length) return { choice: "none", name: null, matches, conformsTo };
+  if (activeName && matches.includes(activeName)) return { choice: "active", name: activeName, matches, conformsTo };
+  if (matches.length > 1) return { choice: "ambiguous", name: null, matches, conformsTo };
+  return { choice: "switch", name: matches[0], matches, conformsTo };
 }
