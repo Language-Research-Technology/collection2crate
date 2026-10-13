@@ -849,6 +849,7 @@ A profile's `enabledOptionKeys` (§5.4) names keys from this table. Child keys a
 | ↳ `mergeFile` | `merge` | Build panel | file picker |
 | ↳ `mergeMappingBuilder` | `merge` | Build panel | column → property mapping dialog |
 | ↳ `doPlaceLookups` | `merge` | Build panel | coordinate lookup for merged `Place` entities |
+| `enableNameLookups` | `name-lookup` | Build panel | named entity recognition over each `.txt`/`.md`/`.docx` file's text at Process; at Build, after `merge`, links each File to a `Person` (`custom:participant`) or `Place` (`custom:place`), reusing an entity whose `@id` is `#` plus the name with spaces as underscores |
 | `makeHtml` | `ro-crate-html-output` | Build panel | write `ro-crate-preview.html` |
 | ↳ `collectionLabelsBuilder` | `ro-crate-html-output` | Build panel | menu names/order for `docx-input` builds — applied to the generated HTML only; `docx_crate.js` always uses each folder's own name/order for the crate itself |
 | ↳ `templateRepoFolder` | `ro-crate-html-output` | Build panel | folder in `rocss-templates` |
