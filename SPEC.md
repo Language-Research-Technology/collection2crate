@@ -849,6 +849,10 @@ A profile's `enabledOptionKeys` (§5.4) names keys from this table. Child keys a
 | ↳ `mergeFile` | `merge` | Build panel | file picker |
 | ↳ `mergeMappingBuilder` | `merge` | Build panel | column → property mapping dialog |
 | ↳ `doPlaceLookups` | `merge` | Build panel | coordinate lookup for merged `Place` entities |
+| ↳ ↳ `placeExactOnly` | `merge` | Build panel | only an exact gazetteer name gives a merged place coordinates; off (and hidden), a name starting with or containing it does too |
+| `enableNameLookups` | `name-lookup` | Build panel | at Process: named entity recognition over each `.txt`/`.md`/`.docx`/`.pdf` file's text, then links each File to a `Person` (`custom:participant`) or `Place` (`custom:place`), reusing an entity already under the `@id` `merge` would give it (`#john_smith`, `#place-mount-isa`); Build starts from the crate Process left |
+| ↳ `nameLookupGazetteer` | `name-lookup` | Build panel | GA and GHAP gazetteers: other proper names that match a place become places, and places get coordinates (a linked `Geometry`, as `merge` writes them), preferring the merge config's `placeMatchRegion`; needs the network |
+| ↳ ↳ `nameLookupExactOnly` | `name-lookup` | Build panel | only exact gazetteer names make a place or give it coordinates; off (and hidden), a name starting with or containing it does too |
 | `makeHtml` | `ro-crate-html-output` | Build panel | write `ro-crate-preview.html` |
 | ↳ `collectionLabelsBuilder` | `ro-crate-html-output` | Build panel | menu names/order for `docx-input` builds — applied to the generated HTML only; `docx_crate.js` always uses each folder's own name/order for the crate itself |
 | ↳ `templateRepoFolder` | `ro-crate-html-output` | Build panel | folder in `rocss-templates` |

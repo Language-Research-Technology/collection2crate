@@ -4,7 +4,7 @@
 // do). Which plugins appear here comes from the PLUGINS env var; see
 // SPEC.md §4.7a.
 //
-//   PLUGINS=generic-input,docx-input,xlsx-crate-input,austlang,file-format-identify,transcript-grammar,ca-data-prep,chat-export,merge,roctable,validate-crate,ro-crate-json-output,ro-crate-xlsx-output,ro-crate-html-output,concordance,ngrams,chart,sentimentexplorer,collocation,topicdetector
+//   PLUGINS=generic-input,docx-input,xlsx-crate-input,austlang,file-format-identify,transcript-grammar,ca-data-prep,chat-export,merge,name-lookup,roctable,validate-crate,ro-crate-json-output,ro-crate-xlsx-output,ro-crate-html-output,concordance,ngrams,chart,sentimentexplorer,collocation,topicdetector,plots
 
 import { buildDeps } from "./deps.js";
 import { createPlugin as create_generic_input } from "collection2crate-plugins/plugins/generic-input/index.js";
@@ -16,6 +16,7 @@ import { createPlugin as create_transcript_grammar } from "collection2crate-plug
 import { createPlugin as create_ca_data_prep } from "collection2crate-plugins/plugins/ca-data-prep/index.js";
 import { createPlugin as create_chat_export } from "collection2crate-plugins/plugins/chat-export/index.js";
 import { createPlugin as create_merge } from "collection2crate-plugins/plugins/merge/index.js";
+import { createPlugin as create_name_lookup } from "collection2crate-plugins/plugins/name-lookup/index.js";
 import { createPlugin as create_roctable } from "collection2crate-plugins/plugins/roctable/index.js";
 import { createPlugin as create_validate_crate } from "collection2crate-plugins/plugins/validate-crate/index.js";
 import { createPlugin as create_ro_crate_json_output } from "collection2crate-plugins/plugins/ro-crate-json-output/index.js";
@@ -27,6 +28,7 @@ import { createPlugin as create_chart } from "collection2crate-plugins/plugins/c
 import { createPlugin as create_sentimentexplorer } from "collection2crate-plugins/plugins/sentimentexplorer/index.js";
 import { createPlugin as create_collocation } from "collection2crate-plugins/plugins/collocation/index.js";
 import { createPlugin as create_topicdetector } from "collection2crate-plugins/plugins/topicdetector/index.js";
+import { createPlugin as create_plots } from "collection2crate-plugins/plugins/plots/index.js";
 
 // One deps object, built once, handed to every factory (SPEC.md §4.7a).
 const deps = buildDeps();
@@ -47,6 +49,7 @@ export const PLUGINS = [
   create_ca_data_prep(deps),
   create_chat_export(deps),
   create_merge(deps),
+  create_name_lookup(deps),
   create_roctable(deps),
   create_validate_crate(deps),
   create_ro_crate_json_output(deps),
@@ -58,6 +61,7 @@ export const PLUGINS = [
   create_sentimentexplorer(deps),
   create_collocation(deps),
   create_topicdetector(deps),
+  create_plots(deps),
 ];
 
 /** Every plugin's Build-panel option schema, in plugin order. */
