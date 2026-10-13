@@ -9,6 +9,7 @@
 import assert from "node:assert/strict";
 import {
   profileConformsTo, crateConformsTo, buildConformanceIndex, chooseProfileForCrate,
+  profileNameFromHash,
 } from "../src/masp.js";
 import { buildCrate, buildFileMetadata, crateToJsonString } from "../src/crate.js";
 
@@ -71,7 +72,16 @@ assert.equal(chooseProfileForCrate(crateWith("https://example.org/other"), index
 assert.equal(chooseProfileForCrate(crateWith(null), index, "birds").choice, "none");
 assert.equal(chooseProfileForCrate(null, index).choice, "none");
 
+// A link's hash names a profile folder (SPEC.md §5.1b), and nothing else.
+assert.equal(profileNameFromHash("#birds"), "birds");
+assert.equal(profileNameFromHash("#/language-resources"), "language-resources");
+assert.equal(profileNameFromHash("#chordpro-songs"), "chordpro-songs");
+assert.equal(profileNameFromHash("#my%2Eprofile"), "my.profile");
+for (const hash of ["", "#", "#/", "#../ldac", "#ldac/profile-crate", "#.hidden", "#%2E%2E", "#%E0%A4%A", "#a b", null]) {
+  assert.equal(profileNameFromHash(hash), null, `hash ${JSON.stringify(hash)}`);
+}
+
 console.log(
   `test-profile-match: all tests passed (${index.length} indexed profiles; single match switches, ` +
-    `shared ${LDAC} is ambiguous, active profile kept)`
+    `shared ${LDAC} is ambiguous, active profile kept; hash names parsed and path-like ones refused)`
 );

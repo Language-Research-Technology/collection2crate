@@ -487,6 +487,21 @@ export async function fetchModeFile(
   );
 }
 
+/**
+ * The profile a link names in its hash — `#birds`, and `#/birds` as well —
+ * or null. Only a bare folder name is accepted, so a hash can't steer the
+ * fetch to some other path in the repository.
+ */
+export function profileNameFromHash(hash) {
+  let name = String(hash || "").replace(/^#\/?/, "");
+  try {
+    name = decodeURIComponent(name);
+  } catch {
+    return null;
+  }
+  return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name) ? name : null;
+}
+
 // ---------------------------------------------------------------------------
 // Matching an existing crate to a profile
 // ---------------------------------------------------------------------------

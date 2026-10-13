@@ -600,6 +600,15 @@ A crate built here carries its profile's `rootDataset.conformsTo` on the root da
 
 The index is built from the mode files alone — raw fetches, so no API quota — once per page, on the first folder whose crate declares a `conformsTo`. A failed build of it is not kept, so the next folder retries. The bundled default declares no `conformsTo` and so is never matched; it is simply what stays in effect.
 
+### 5.1b A link can name the profile
+
+The URL hash names a repository profile by its folder name: `…/collection2crate/#birds`, `#ldac`, `#language-resources`. A hash rather than a path or query because the app is a static GitHub Pages site — a path would 404, and a fragment never reaches the server at all. `#/birds` is read the same way.
+
+- **On load**, a named profile is fetched and selected in place of the bundled default. A name that isn't a bare folder name (`profileNameFromHash()` refuses anything with a `/`, or a leading `.`) or that won't load is logged, the default applies, and the hash is cleared.
+- **Editing the hash** switches profile; emptying it returns to the default.
+- **Choosing a profile in the app** rewrites the hash to match (cleared for the default), with `history.replaceState`, so the address bar is always a shareable link and no history entries pile up.
+- **A link outranks an existing crate.** The person who followed `#birds` chose a profile; a folder whose crate conforms to a different one (§5.1a) gets a warning in the log, not a switch. Choosing a profile any other way ends that precedence.
+
 ### 5.2 What a profile ships
 
 Profiles come from two places: the **profile repository** (`Language-Research-Technology/c2c-masp-profiles`), fetched when the user picks one, and the **bundled default** (§5.1), compiled in from the `ro-crate-masp` dependency. Both have the same shape — a folder containing:
