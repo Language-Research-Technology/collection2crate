@@ -21,6 +21,7 @@ import { listGitHubFolder } from "./github.js";
 import {
   loadProfile, profileToConfig, resolvePropertyGroups, listProfiles, fetchProfile,
   resolveBuildOptions, walkOptionSchema, uploadKeyFor,
+  buildConformanceIndex, chooseProfileForCrate, crateConformsTo,
 } from "./masp.js";
 import { loadDefaultProfile, DEFAULT_PROFILE_NAME } from "./default_profile.js";
 import { openModal, closeAllModals } from "./ui_helpers.js";
@@ -1101,6 +1102,7 @@ async function pickFolder() {
 
   if (!state.profile) await useDefaultProfile();
   await emitFolderPicked();
+  await selectProfileForExistingCrate();
   await afterProfileOrFolderChange();
 }
 
@@ -1322,6 +1324,8 @@ async function loadProfileList() {
       profileSelect.append(option);
     }
     profileStatus.textContent = `${profiles.length} profile(s) from the profile repository.`;
+    // A folder picked before the list arrived may already have chosen one.
+    if (state.profile?.source === "repository") profileSelect.value = state.profile.name;
   } catch (e) {
     profileStatus.textContent = `Profile list unavailable (${e.message}). The bundled default still works.`;
   }
@@ -1364,6 +1368,63 @@ function onProfileSelected() {
   resetOptionsFromProfile();
   state.preparedCtx = null;
   refreshNav();
+}
+
+// Every repository profile's conformance URIs, fetched on the first folder
+// whose crate declares one and kept for the page's lifetime. A failure is not
+// kept, so the next folder tries again.
+let conformanceIndexPromise = null;
+function conformanceIndex() {
+  conformanceIndexPromise ||= listProfiles()
+    .then((profiles) => buildConformanceIndex(profiles.map((p) => p.name)))
+    .catch((e) => { conformanceIndexPromise = null; throw e; });
+  return conformanceIndexPromise;
+}
+
+/**
+ * Open the folder's existing crate with the profile it says it conforms to
+ * (SPEC.md §5.1a). Anything short of one clear match keeps the active profile:
+ * the person can still pick one under Profile.
+ */
+async function selectProfileForExistingCrate() {
+  if (!state.working?.onDisk) return;
+  const generation = state.generation;
+  const json = state.working.toJSON();
+  if (!crateConformsTo(json).length) return;
+
+  let result;
+  try {
+    result = chooseProfileForCrate(json, await conformanceIndex(), state.profile?.name);
+  } catch (e) {
+    log(`Could not match the existing crate to a profile (${e.message}). Keeping ${state.profile?.name}.`, "warn");
+    return;
+  }
+  if (generation !== state.generation) return;
+  const declared = result.conformsTo.join(", ");
+
+  if (result.choice === "none") {
+    log(`The existing crate conforms to ${declared}, which no repository profile declares. Keeping ${state.profile?.name}.`, "muted");
+    return;
+  }
+  if (result.choice === "active") return;
+  if (result.choice === "ambiguous") {
+    log(`The existing crate conforms to ${declared}, which ${result.matches.join(" and ")} all declare — choose one under Profile. Keeping ${state.profile?.name}.`, "warn");
+    return;
+  }
+
+  try {
+    profileStatus.textContent = `Fetching ${result.name}…`;
+    const profile = await loadProfile(await fetchProfile(result.name));
+    if (generation !== state.generation) return;
+    log(`The existing crate conforms to ${declared}, so the ${result.name} profile was selected.`, "ok");
+    state.profile = profile;
+    profileSelect.value = result.name;
+    onProfileSelected();
+  } catch (e) {
+    if (generation !== state.generation) return;
+    profileStatus.textContent = `Could not load ${result.name}: ${e.message}`;
+    log(`The existing crate conforms to the ${result.name} profile, but it could not be loaded: ${e.message}`, "warn");
+  }
 }
 
 /** profile:selected — plugins named by the profile's tool-config are in play. */
