@@ -21,7 +21,7 @@ import { listGitHubFolder } from "./github.js";
 import {
   loadProfile, profileToConfig, resolvePropertyGroups, listProfiles, fetchProfile,
   resolveBuildOptions, walkOptionSchema, uploadKeyFor,
-  buildConformanceIndex, chooseProfileForCrate, crateConformsTo,
+  buildConformanceIndex, chooseProfileForCrate, crateConformsTo, profileNameFromHash,
 } from "./masp.js";
 import { loadDefaultProfile, DEFAULT_PROFILE_NAME } from "./default_profile.js";
 import { openModal, closeAllModals } from "./ui_helpers.js";
@@ -110,6 +110,9 @@ const state = {
   reconcile: null,
   fileChoices: { ignore: [], keep: [] },
   profile: null,
+  // The profile was named by the page's URL hash (#birds), and so outranks
+  // the one an existing crate conforms to (SPEC.md §5.1b).
+  profileFromUrl: false,
   describeSourceLabel: "",
   options: {},
   settings: {},
@@ -1337,6 +1340,57 @@ async function useDefaultProfile() {
   onProfileSelected();
 }
 
+async function loadRepositoryProfile(name) {
+  profileStatus.textContent = `Fetching ${name}…`;
+  return await loadProfile(await fetchProfile(name));
+}
+
+/**
+ * Select the profile the URL hash names (SPEC.md §5.1b). Resolves true when
+ * the profile changed. A hash that names nothing loadable is logged and put
+ * back to match the profile in effect, so the address bar never misleads.
+ */
+async function selectProfileFromHash() {
+  const name = profileNameFromHash(location.hash);
+  if (!name) {
+    // An emptied hash means the bundled default.
+    if (location.hash.replace(/^#\/?/, "") || state.profile?.source !== "repository") {
+      syncProfileHash();
+      return false;
+    }
+    await useDefaultProfile();
+    return true;
+  }
+  if (name === state.profile?.name) {
+    state.profileFromUrl = true;
+    return false;
+  }
+  try {
+    const profile = await loadRepositoryProfile(name);
+    log(`Profile ${name} chosen by the link (#${name}).`, "ok");
+    state.profile = profile;
+    onProfileSelected({ fromUrl: true });
+    return true;
+  } catch (e) {
+    profileStatus.textContent = `Could not load ${name}: ${e.message}`;
+    log(`The link names profile "${name}", which could not be loaded: ${e.message}`, "warn");
+    syncProfileHash();
+    return false;
+  }
+}
+
+/** Keep the hash naming the active profile, so the address bar is a shareable link. */
+function syncProfileHash() {
+  const hash = state.profile?.source === "repository" ? `#${encodeURIComponent(state.profile.name)}` : "";
+  if (location.hash === hash) return;
+  // replaceState, not location.hash: no history entry, and no hashchange.
+  history.replaceState(history.state, "", hash || location.pathname + location.search);
+}
+
+window.addEventListener("hashchange", async () => {
+  if (await selectProfileFromHash()) await afterProfileOrFolderChange();
+});
+
 $("#apply-profile").addEventListener("click", async (event) => {
   const name = profileSelect.value;
   try {
@@ -1344,8 +1398,7 @@ $("#apply-profile").addEventListener("click", async (event) => {
       if (!name) {
         await useDefaultProfile();
       } else {
-        profileStatus.textContent = `Fetching ${name}…`;
-        state.profile = await loadProfile(await fetchProfile(name));
+        state.profile = await loadRepositoryProfile(name);
         onProfileSelected();
       }
       await afterProfileOrFolderChange();
@@ -1357,7 +1410,10 @@ $("#apply-profile").addEventListener("click", async (event) => {
   }
 });
 
-function onProfileSelected() {
+function onProfileSelected({ fromUrl = false } = {}) {
+  state.profileFromUrl = fromUrl;
+  profileSelect.value = state.profile.source === "repository" ? state.profile.name : "";
+  syncProfileHash();
   const label = state.profile.name === DEFAULT_PROFILE_NAME
     ? `${DEFAULT_PROFILE_NAME} — minimal crate, plain preview`
     : `${state.profile.name} — ${state.profile.metadata?.description || "from the profile repository"}`;
@@ -1412,13 +1468,16 @@ async function selectProfileForExistingCrate() {
     return;
   }
 
+  if (state.profileFromUrl) {
+    log(`The existing crate conforms to ${declared} (the ${result.name} profile), but the link chose ${state.profile.name}. Keeping ${state.profile.name}.`, "warn");
+    return;
+  }
+
   try {
-    profileStatus.textContent = `Fetching ${result.name}…`;
-    const profile = await loadProfile(await fetchProfile(result.name));
+    const profile = await loadRepositoryProfile(result.name);
     if (generation !== state.generation) return;
     log(`The existing crate conforms to ${declared}, so the ${result.name} profile was selected.`, "ok");
     state.profile = profile;
-    profileSelect.value = result.name;
     onProfileSelected();
   } catch (e) {
     if (generation !== state.generation) return;
@@ -2494,7 +2553,7 @@ async function boot() {
   // c2c:loaded — the context object exists; plugins may set up shared state.
   await announceAndEmit(bus, HOOKS.C2C_LOADED, baseCtx(state.generation));
 
-  await useDefaultProfile();
+  if (!(await selectProfileFromHash()) && !state.profile) await useDefaultProfile();
   await afterProfileOrFolderChange();
   loadProfileList();
 
