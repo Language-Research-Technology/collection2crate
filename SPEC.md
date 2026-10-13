@@ -850,7 +850,7 @@ A profile's `enabledOptionKeys` (§5.4) names keys from this table. Child keys a
 | ↳ `mergeMappingBuilder` | `merge` | Build panel | column → property mapping dialog |
 | ↳ `doPlaceLookups` | `merge` | Build panel | coordinate lookup for merged `Place` entities |
 | `enableNameLookups` | `name-lookup` | Build panel | at Process: named entity recognition over each `.txt`/`.md`/`.docx`/`.pdf` file's text, then links each File to a `Person` (`custom:participant`) or `Place` (`custom:place`), reusing an entity already under the `@id` `merge` would give it (`#john_smith`, `#place-mount-isa`); Build starts from the crate Process left |
-| ↳ `nameLookupGazetteer` | `name-lookup` | Build panel | also look up other proper names in the GA and GHAP gazetteers and treat exact matches as places; needs the network |
+| ↳ `nameLookupGazetteer` | `name-lookup` | Build panel | GA and GHAP gazetteers: other proper names that match a place exactly become places, and places get coordinates (a linked `Geometry`, as `merge` writes them), preferring the merge config's `placeMatchRegion`; needs the network |
 | `makeHtml` | `ro-crate-html-output` | Build panel | write `ro-crate-preview.html` |
 | ↳ `collectionLabelsBuilder` | `ro-crate-html-output` | Build panel | menu names/order for `docx-input` builds — applied to the generated HTML only; `docx_crate.js` always uses each folder's own name/order for the crate itself |
 | ↳ `templateRepoFolder` | `ro-crate-html-output` | Build panel | folder in `rocss-templates` |
