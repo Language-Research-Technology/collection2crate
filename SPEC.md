@@ -281,14 +281,14 @@ have changed in between); everything a plugin added is carried untouched. A
 plugin needs no cross-run mechanism of its own: write to `ctx` at
 `files:prepare`, read it at `crate:build`, exactly as within a single run.
 
-**So Build is gated on Process.** The Build page and its button stay disabled
-until a Process run has finished, because there would otherwise be nothing to
-build from. The exception is a profile that enables no processing options at
-all: nothing to prepare, so Build opens immediately and works from the file
-metadata the folder scan produced when the folder was picked. Changing a
-processing option — or any option nested under one — discards the prepared run
-and closes Build again, since what it prepared no longer describes what was
-asked for. Changing a *build* option does not: it changes what the build does,
+**So Build is gated on changed processing options.** Build is open as soon
+as a folder and profile are chosen: without a Process run it starts from a
+fresh `ctx` and the file metadata the folder scan produced, and works with
+whatever plugin output is already in the folder. Changing a processing option —
+or any option nested under one — discards any prepared run and closes Build
+until Process has run again, since neither the prepared run nor the output on
+disk describes what was asked for. A profile that enables no processing
+options has nothing to change, so Build never closes for it. Changing a *build* option does not: it changes what the build does,
 not what was prepared. A child option marked `stage: "build"` counts as a build
 option even though it sits under a processing one — `ca-data-prep`'s and
 `chat-export`'s choice of whether their generated files are described in the
