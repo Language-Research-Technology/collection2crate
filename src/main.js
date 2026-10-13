@@ -124,9 +124,13 @@ const state = {
   lastHtmlTemplate: null,
   // What Process left behind: the ctx its run finished with, and how many
   // options that step actually offers for this profile. Build consumes the
-  // first and is gated on the second (SPEC.md §4.4).
+  // first when there is one (SPEC.md §4.4).
   preparedCtx: null,
   processOptionCount: 0,
+  // A processing option or a file choice was changed since the folder or
+  // profile was chosen, or since Process last ran — Build waits for Process
+  // until it is re-run.
+  processInputsChanged: false,
   // Choosing a new folder mid-build doesn't abort in-flight plugin work, so a
   // generation counter stops a stale run from touching the log or the UI.
   generation: 0,
@@ -1014,10 +1018,11 @@ function refreshNav() {
   $("#context-bar").hidden = !state.dirHandle;
   $("#context-folder").textContent = state.folderName ? `📁 ${state.folderName}` : "";
   const ready = !!state.profile && !!state.dirHandle;
-  // Build assembles a crate from what Process prepared, so it stays shut until
-  // Process has run — unless this profile offers no processing options at all,
-  // in which case there is nothing to prepare and nothing to wait for.
-  const buildable = ready && (!!state.preparedCtx || state.processOptionCount === 0);
+  // Build can run straight away on the profile's processing options and the
+  // folder's files; only once an option or a file choice has been changed does
+  // it wait for Process to run on the new values. A profile with no processing
+  // options has nothing to wait for.
+  const buildable = ready && (!state.processInputsChanged || state.processOptionCount === 0);
   const enabled = {
     select: true,
     process: ready,
@@ -1095,6 +1100,7 @@ async function pickFolder() {
   state.hasBuilt = false;
   closeAllModals();
   state.preparedCtx = null;
+  state.processInputsChanged = false;
   resetActionButtons();
   setMainProgress(0);
   hideSubProgress(true);
@@ -1189,9 +1195,11 @@ async function reviewFileChanges() {
     const before = JSON.stringify(resolveDecisions(state.reconcile, state.fileChoices));
     state.fileChoices = chosen;
     // Ignoring or adding a file changes what Process reads, so what it
-    // prepared no longer describes the folder the build will see.
-    if (JSON.stringify(resolveDecisions(state.reconcile, chosen)) !== before && state.preparedCtx) {
+    // prepared no longer describes the folder the build will see — Build
+    // closes until Process has run on the new set of files.
+    if (JSON.stringify(resolveDecisions(state.reconcile, chosen)) !== before) {
       state.preparedCtx = null;
+      state.processInputsChanged = true;
       log("File choices changed — run Process again before building.", "warn");
     }
   }
@@ -1423,6 +1431,7 @@ function onProfileSelected({ fromUrl = false } = {}) {
   if (state.profile.configNote) log(state.profile.configNote, "warn");
   resetOptionsFromProfile();
   state.preparedCtx = null;
+  state.processInputsChanged = false;
   refreshNav();
 }
 
@@ -1524,11 +1533,12 @@ function renderBuildOptions() {
 
 function onOptionChanged(node) {
   // Processing options decide what Process does, so changing one invalidates
-  // what it left behind — Build closes again until it has been re-run.
+  // what it left behind — Build closes until Process has run with it.
   // An action stores no option value, so running one changes nothing Process
   // reads.
   if (!node || (node.type !== "action" && PROCESS_KEYS_DEEP.has(node.key))) {
     state.preparedCtx = null;
+    state.processInputsChanged = true;
     refreshNav();
   }
   // Options are per-build and reset from the profile each run, so nothing is
@@ -1784,8 +1794,10 @@ $("#run-process").addEventListener("click", async (event) => {
     { label: "Processing files" }
   ));
   if (!ctx) return;
-  // Build runs on what this left behind, so it only opens once this has run.
+  // Build runs on what this left behind, and the options it ran with are now
+  // the ones Build expects.
   state.preparedCtx = ctx;
+  state.processInputsChanged = false;
   renderDescribeSummary();
   refreshNav();
 });
