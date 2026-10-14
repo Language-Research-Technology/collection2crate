@@ -87,8 +87,8 @@ The person enters a list of labels, each with:
 - a **description**, saying what counts as this label. This text is given
   to the model, and its wording has the largest effect on the results.
 
-They also enter one **question** that frames the task, for example "Which
-theme is the speaker talking about?".
+For one label per row they also enter a **question** that frames the task,
+for example "Which theme is the speaker talking about?".
 
 They choose one of two label types:
 
@@ -97,9 +97,11 @@ They choose one of two label types:
   the probabilities sum to 1. The panel adds a label named `none` with the
   description "none of the other labels apply" unless the person removes
   it. Without it, every row is forced into some theme even when none fits.
-- **Any number of labels per row.** For each label, the model answers a
-  separate yes/no question: "Does this text match the label?". It returns
-  the probability of yes. A row is given every label whose probability is
+- **Any number of labels per row.** For each label, the model judges
+  whether the statement "The text is about <name>: <description>." is true,
+  and returns the probability that it is. The question that frames the task
+  is not used, and there is no `none` label: a row that matches no label
+  simply gets none. A row is given every label whose probability is
   at or above a threshold. The default threshold is 0.5, and it can be set
   per label. This is the right type when a passage can be about several
   themes at once.
@@ -156,8 +158,7 @@ probabilities. "Calibrated" means a probability of 0.8 should be correct
 about 80% of the time.
 
 An experiment on 2026-10-14 established the following. The conversion
-scripts and the JavaScript port from that experiment are the starting
-point for implementation.
+scripts are in `tools/`: `export_onnx.py`, then `quantize_web.py 8`.
 
 - The model was converted to ONNX and runs in Chrome with `onnxruntime-web`.
   The tokenizer runs through the `PreTrainedTokenizer` class from
@@ -316,11 +317,11 @@ Pure, exported, testable without a DOM or a model:
 
 - `rowsForSelection(table, { textColumn, keepColumns, filter })`: the texts
   to classify, the skipped empty rows, and the kept values.
-- `buildSequence(encode, text, question)` and `labelProbabilities(logits,
-  question)`: input construction and probability calculation, checked
-  against reference token IDs and logits saved from the Python
-  implementation.
-- `assignLabels(probabilities, { type, thresholds })`.
+- `buildSequence(encode, text, question)` and `probabilities(logits,
+  qtype)` in `thx01.js`: input construction and probability calculation,
+  checked against `thx01.fixture.json`, which `tools/make_fixture.py`
+  writes by running the model's own Python code.
+- `assignLabels(scores, labelSet)`.
 - `compareLabels(assigned, existing)`: agreement, per-label precision and
   recall, the confusion table and the disagreement rows, checked against
   hand-worked numbers.
