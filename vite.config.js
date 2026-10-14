@@ -52,6 +52,14 @@ function prepareMaspValidator() {
  * plugin, or a `git pull` in that checkout, was invisible until the dev
  * server was restarted. This watches the checkout's own source folders and
  * drops every cached transform when one of them changes.
+ *
+ * Reloading isn't enough on its own: Vite serves anything under
+ * node_modules as `immutable` for a year, at a `?v=` URL that only changes
+ * when dependencies are re-optimised — so the browser would keep running its
+ * cached copy of a plugin the server has since changed. The checkout's own
+ * files are sent `no-cache` instead, which makes the browser ask every time;
+ * Vite's ETag answers an unchanged file with a 304. Its own dependencies
+ * (its nested node_modules) keep Vite's long cache.
  */
 function watchPluginsCheckout() {
   const link = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "node_modules/collection2crate-plugins");
@@ -60,6 +68,15 @@ function watchPluginsCheckout() {
     apply: "serve",
     configureServer(server) {
       if (!existsSync(link)) return;
+      const ownFile = /^\/node_modules\/collection2crate-plugins\/(?!node_modules\/)/;
+      server.middlewares.use((req, res, next) => {
+        if (ownFile.test(req.url || "")) {
+          const setHeader = res.setHeader.bind(res);
+          res.setHeader = (name, value) =>
+            setHeader(name, String(name).toLowerCase() === "cache-control" ? "no-cache" : value);
+        }
+        next();
+      });
       const root = realpathSync(link);
       const watched = ["index.js", "plugins", "src"].map((part) => path.join(root, part));
       server.watcher.add(watched);
