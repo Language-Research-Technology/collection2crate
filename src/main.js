@@ -77,7 +77,7 @@ const OUTPUT_PATHS = composeOutputPaths();
 const PROCESS_OPTION_KEYS = new Set([
   "docxInput", "xlsxCrate", "enableLanguageLookups", "identifyFileFormats",
   "processTranscriptDocuments", "generateChatFiles", "transcriptGrammarEdit", "merge",
-  "enableNameLookups",
+  "enableNameLookups", "textCleanerAction"
 ]);
 
 // The same set, plus every child key beneath those options — changing
