@@ -4,7 +4,7 @@
 // do). Which plugins appear here comes from the PLUGINS env var; see
 // SPEC.md §4.7a.
 //
-//   PLUGINS=generic-input,docx-input,xlsx-crate-input,austlang,file-format-identify,transcript-grammar,ca-data-prep,chat-export,merge,name-lookup,roctable,validate-crate,ro-crate-json-output,ro-crate-xlsx-output,ro-crate-html-output,concordance,ngrams,chart,sentimentexplorer,collocation,topicdetector,plots
+//   PLUGINS=generic-input,docx-input,xlsx-crate-input,austlang,file-format-identify,transcript-grammar,textcleaner,ca-data-prep,chat-export,merge,name-lookup,roctable,validate-crate,ro-crate-json-output,ro-crate-xlsx-output,ro-crate-html-output,concordance,ngrams,chart,sentimentexplorer,collocation,topicdetector,plots
 
 import { buildDeps } from "./deps.js";
 import { createPlugin as create_generic_input } from "collection2crate-plugins/plugins/generic-input/index.js";
@@ -13,6 +13,7 @@ import { createPlugin as create_xlsx_crate_input } from "collection2crate-plugin
 import { createPlugin as create_austlang } from "collection2crate-plugins/plugins/austlang/index.js";
 import { createPlugin as create_file_format_identify } from "collection2crate-plugins/plugins/file-format-identify/index.js";
 import { createPlugin as create_transcript_grammar } from "collection2crate-plugins/plugins/transcript-grammar/index.js";
+import { createPlugin as create_textcleaner } from "collection2crate-plugins/plugins/textcleaner/index.js";
 import { createPlugin as create_ca_data_prep } from "collection2crate-plugins/plugins/ca-data-prep/index.js";
 import { createPlugin as create_chat_export } from "collection2crate-plugins/plugins/chat-export/index.js";
 import { createPlugin as create_merge } from "collection2crate-plugins/plugins/merge/index.js";
@@ -46,6 +47,7 @@ export const PLUGINS = [
   create_austlang(deps),
   create_file_format_identify(deps),
   create_transcript_grammar(deps),
+  create_textcleaner(deps),
   create_ca_data_prep(deps),
   create_chat_export(deps),
   create_merge(deps),
