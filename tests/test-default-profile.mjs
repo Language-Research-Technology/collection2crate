@@ -43,8 +43,10 @@ const profile = await loadDefaultProfile();
     "The vendored mode file carries no collection2crate block — upstream has no reason to hold a key only this app reads");
   assert.deepEqual(profile.buildOptions, { ...DEFAULT_BUILD_OPTIONS },
     "The overlay supplies the buildOptions the default needs, without modifying the dependency's file");
-  assert.deepEqual(profile.buildOptions.enabledOptionKeys, ["makeHtml"],
-    "The default enables makeHtml and nothing else: JSON plus a preview, no merge, no language lookups, no template fetch");
+  assert.deepEqual(profile.buildOptions.enabledOptionKeys, ["makeHtml", "textCleanerAction"],
+    "The default offers makeHtml and the manual text-cleaning action");
+  assert.deepEqual(profile.buildOptions.plugins, ["makeHtml"],
+    "Only makeHtml is selected automatically: JSON plus a preview, no merge, no language lookups, no template fetch");
 
   const overlaid = overlayBuildOptions(vendored);
   assert.equal(vendored.tools?.collection2crate, undefined,
