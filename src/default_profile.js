@@ -16,11 +16,10 @@ export const DEFAULT_PROFILE_NAME = "schema.org (default)";
 // only this app reads. So it is overlaid here onto an otherwise unmodified copy
 // of the dependency's file — pushing it upstream would put our concern in their
 // repo, and forking the profile would cost the offline guarantee bundling exists
-// for. It names makeHtml and nothing else, which is what makes the default's
-// behaviour describable exactly: JSON plus a preview, no merge, no language
-// lookups, no template fetch.
+// for. It names makeHtml and textCleanerAction: JSON plus a preview, text cleaning,
+// no merge, no language lookups, no template fetch.
 export const DEFAULT_BUILD_OPTIONS = Object.freeze({
-  enabledOptionKeys: ["makeHtml"],
+  enabledOptionKeys: ["makeHtml", "textCleanerAction"],
   plugins: ["makeHtml"],
 });
 
