@@ -22,12 +22,12 @@ const noop = () => {};
 const ids = (crate) => crate.getGraph().map((e) => e["@id"]).sort();
 const refs = (v) => [].concat(v ?? []).map((x) => (x && typeof x === "object" ? x["@id"] : x));
 
-// The real core helper, so the plugins' merge path is exercised properly. This
-// repo has no dependency on collection2crate, so the check that needs it is
-// skipped when the sibling checkout isn't there.
-const { mergeCrateInto } = await import("../collection2crate/src/crate.js").catch(() => ({}));
+// The real core helper from the app workspace, so the plugins' merge path is
+// exercised properly. Only this test reaches into the app — the plugins
+// themselves still receive it through deps.
+const { mergeCrateInto } = await import("../app/src/crate.js");
 const deps = new Proxy({}, {
-  get: (_t, key) => (key === "mergeCrateInto" && mergeCrateInto ? mergeCrateInto : noop),
+  get: (_t, key) => (key === "mergeCrateInto" ? mergeCrateInto : noop),
   has: () => true,
 });
 
@@ -126,7 +126,6 @@ await check("ticked: the CSV is in the crate", async () => {
 });
 
 await check("unticked, on an existing crate: an earlier build's CSV entities are taken out", async () => {
-  if (!mergeCrateInto) return console.log("       (skipped: collection2crate checkout not beside this repo)");
   const existing = buildRoCrateMetadata("C", [record]);
   const ctx = caCtx({ crate: existing, existingCrate: { "@graph": [] }, options: { [CSV_KEY]: false } });
   await REGISTRY["ca-data-prep"](deps).hooks["crate:build"].handler(ctx);

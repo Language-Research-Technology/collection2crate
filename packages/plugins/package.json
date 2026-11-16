@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "description": "Build plugins for collection2crate — hook-tap plugins, including the builders that assemble the crate, split out of collection2crate's src/plugins/ into their own repo; each lives in plugins/<name>/.",
+  "license": "Apache-2.0",
   "main": "index.js",
   "exports": {
     ".": "./index.js",

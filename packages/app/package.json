@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "description": "Turn a folder of files into an RO-Crate, in the browser.",
+  "license": "Apache-2.0",
   "scripts": {
     "select-plugins": "node scripts/select-plugins.mjs",
     "predev": "npm run select-plugins",
@@ -15,7 +16,7 @@
     "test": "node scripts/run-tests.mjs"
   },
   "dependencies": {
-    "collection2crate-plugins": "file:../collection2crate-plugins",
+    "collection2crate-plugins": "*",
     "exceljs": "^4.4.0",
     "ro-crate": "^3.7.2",
     "ro-crate-excel": "^1.2.1",
