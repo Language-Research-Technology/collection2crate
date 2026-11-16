@@ -7,9 +7,9 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm run dev -w collection2crate",
-    "build": "npm run build -w collection2crate",
-    "preview": "npm run preview -w collection2crate",
+    "dev": "npm run dev -w collection2crate --",
+    "build": "npm run build -w collection2crate --",
+    "preview": "npm run preview -w collection2crate --",
     "test": "npm test --workspaces --if-present"
   }
 }

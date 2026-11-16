@@ -1,8 +1,5 @@
 import { defineConfig } from "vite";
 import { nodePolyfills } from "vite-plugin-node-polyfills";
-import { existsSync, realpathSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 /**
  * ro-crate-masp's validator doubles as a CLI, and that costs it three things a
@@ -44,94 +41,14 @@ function prepareMaspValidator() {
   };
 }
 
-/**
- * Reload the page when collection2crate-plugins changes.
- *
- * The plugins arrive through a symlink under node_modules (preserveSymlinks
- * keeps that path), and Vite never watches node_modules — so an edit to a
- * plugin, or a `git pull` in that checkout, was invisible until the dev
- * server was restarted. This watches the checkout's own source folders and
- * drops every cached transform when one of them changes.
- *
- * Reloading isn't enough on its own: Vite serves anything under
- * node_modules as `immutable` for a year, at a `?v=` URL that only changes
- * when dependencies are re-optimised — so the browser would keep running its
- * cached copy of a plugin the server has since changed. The checkout's own
- * files are sent `no-cache` instead, which makes the browser ask every time;
- * Vite's ETag answers an unchanged file with a 304. Its own dependencies
- * (its nested node_modules) keep Vite's long cache.
- */
-function watchPluginsCheckout() {
-  const link = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "node_modules/collection2crate-plugins");
-  return {
-    name: "c2c-watch-plugins-checkout",
-    apply: "serve",
-    configureServer(server) {
-      if (!existsSync(link)) return;
-      const ownFile = /^\/node_modules\/collection2crate-plugins\/(?!node_modules\/)/;
-      server.middlewares.use((req, res, next) => {
-        if (ownFile.test(req.url || "")) {
-          const setHeader = res.setHeader.bind(res);
-          res.setHeader = (name, value) =>
-            setHeader(name, String(name).toLowerCase() === "cache-control" ? "no-cache" : value);
-        }
-        next();
-      });
-      const root = realpathSync(link);
-      const watched = ["index.js", "plugins", "src"].map((part) => path.join(root, part));
-      server.watcher.add(watched);
-      const reload = (file) => {
-        if (!watched.some((dir) => file === dir || file.startsWith(dir + path.sep))) return;
-        server.moduleGraph.invalidateAll();
-        server.ws.send({ type: "full-reload" });
-        server.config.logger.info(`collection2crate-plugins changed (${path.relative(root, file)}) — reloading`, { timestamp: true });
-      };
-      for (const event of ["change", "add", "unlink"]) server.watcher.on(event, reload);
-    },
-  };
-}
-
 export default defineConfig({
   // So the built site works from any path, including a GitHub Pages subfolder.
   base: "./",
   plugins: [
     prepareMaspValidator(),
-    watchPluginsCheckout(),
     // Buffer/process/global for transitive dependencies (exceljs and friends).
     nodePolyfills({ globals: { Buffer: true, global: true, process: true } }),
   ],
-  optimizeDeps: {
-    // collection2crate-plugins is a local, symlinked source checkout, not a published
-    // package, and its modules use Vite's own ?raw / ?url suffixes — which
-    // esbuild's dependency pre-bundler doesn't understand, so it fails the dev
-    // server outright. Excluding it leaves those imports to Vite's own
-    // pipeline, which is where they were always meant to be handled.
-    exclude: ["collection2crate-plugins"],
-    // Excluding a package also stops Vite pre-bundling what that package
-    // imports — and collection2crate-plugins' own dependency tree is mostly CommonJS, living
-    // in its own nested node_modules because it is a symlinked checkout. Served
-    // raw, `import mammoth from "mammoth"` is a CJS module with no ESM default
-    // export, and the dev server dies on it. These are every CJS dependency
-    // reached from collection2crate-plugins, named with Vite's `parent > child` syntax so
-    // they are pre-bundled to ESM even though their parent is not. Production
-    // is unaffected: Rollup's commonjs plugin handles all of this at build time.
-    include: [
-      "collection2crate-plugins > mammoth",
-      "collection2crate-plugins > cheerio",
-      "collection2crate-plugins > exceljs",
-      "collection2crate-plugins > ro-crate",
-      "collection2crate-plugins > ro-crate-excel",
-      "collection2crate-plugins > ro-crate-excel/lib/workbook.js",
-      "collection2crate-plugins > roctable > ro-crate",
-      "collection2crate-plugins > roctable > csv-parse/sync",
-      "collection2crate-plugins > roctable > csv-stringify/sync",
-    ],
-  },
-  resolve: {
-    // collection2crate-plugins is a local file: dependency, so it arrives as a symlink;
-    // without this Vite resolves through it and loses the package identity.
-    preserveSymlinks: true,
-  },
   build: {
     target: "es2022",
     // The bundled default profile (~1.6 MB) is deliberately its own chunk.
