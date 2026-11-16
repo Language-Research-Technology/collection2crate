@@ -3,7 +3,7 @@
 // check every output plugin already respects).
 //
 // Hook names are literal strings (a stable collection2crate contract, see
-// this repo's README) rather than an imported HOOKS constant, and the core
+// this package's README) rather than an imported HOOKS constant, and the core
 // collection2crate functions this plugin needs (crate.js/fs_helpers.js) are
 // injected via createPlugin(deps) rather than imported by relative path —
 // that's what keeps this package free of any runtime dependency back on

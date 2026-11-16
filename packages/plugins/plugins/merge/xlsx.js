@@ -6,7 +6,7 @@
 // still shared with crate.js (addLanguageEntities, the austlang plugin's
 // crate-mutation primitive, uses it too) — collection2crate's core function,
 // passed in by the caller (merge/index.js's createPlugin(deps)) rather than
-// imported by relative path, per this repo's README.
+// imported by relative path, per this package's README.
 import ExcelJS from "exceljs";
 import { createPlaceLookupService, setPlaceGeometry, placeLookupSettings } from "../../src/_place_lookup.js";
 import { generatedEntityId } from "../../src/_entity_ids.js";

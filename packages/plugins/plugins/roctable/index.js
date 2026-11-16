@@ -40,7 +40,7 @@ const OUTPUT_DIR = "_outputs/roctable";
 const CRATE_FILE = "ro-crate-metadata.json";
 
 // Hook names are literal strings and core collection2crate functions arrive via
-// createPlugin(deps) — see this repo's README.
+// createPlugin(deps) — see this package's README.
 let readJsonFromFolder, writeFileAtPath, getFileHandleAtPath, readFileTextFromDirectory, loadCrateFromJson, openModal;
 
 export function createPlugin(deps) {

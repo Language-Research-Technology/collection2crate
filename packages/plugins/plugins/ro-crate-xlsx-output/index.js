@@ -4,7 +4,7 @@
 // move to Build options — placename/Austlang lookups — changed location).
 //
 // Hook names are literal strings and core collection2crate functions arrive
-// via createPlugin(deps) — see this repo's README.
+// via createPlugin(deps) — see this package's README.
 import { progressFor } from "../../src/_progress.js";
 
 let crateToXlsxBytes, writeFile, fileExists;

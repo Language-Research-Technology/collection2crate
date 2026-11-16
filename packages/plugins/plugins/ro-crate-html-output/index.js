@@ -10,7 +10,7 @@
 // throughout this file's helpers below, so rather than threading them as an
 // explicit parameter through every call site, createPlugin(deps) assigns
 // them once into these module-level bindings before the plugin object is
-// ever used — see this repo's README for the createPlugin(deps) contract.
+// ever used — see this package's README for the createPlugin(deps) contract.
 import { resolveProfileGroups } from "./layout.js";
 import { countedProgress, progressFor } from "../../src/_progress.js";
 

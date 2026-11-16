@@ -15,7 +15,7 @@
 // fallback: it builds unless a gated builder with a lower priority (e.g.
 // docx-input at 5) is switched on for the run.
 //
-// Core collection2crate functions arrive via createPlugin(deps) — see this repo's
+// Core collection2crate functions arrive via createPlugin(deps) — see this package's
 // README.
 let buildFileMetadata, buildCrate;
 

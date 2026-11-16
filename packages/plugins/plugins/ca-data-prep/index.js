@@ -10,7 +10,7 @@ import {
 } from "./process.js";
 
 // Hook names are literal strings and writeFileAtPath (fs_helpers.js) arrives
-// via createPlugin(deps) — see this repo's README.
+// via createPlugin(deps) — see this package's README.
 import { countedProgress } from "../../src/_progress.js";
 import { outputsInCrateOption, includeOutputs, removeOutputEntities } from "../../src/_crate_outputs.js";
 import {

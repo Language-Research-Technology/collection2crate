@@ -43,7 +43,7 @@ import { ROCrate } from "ro-crate";
 
 // writeFileAtPath is a collection2crate core function (fs_helpers.js),
 // injected once via configure() rather than imported by relative path — see
-// docx-input/index.js's createPlugin(deps) and this repo's README.
+// docx-input/index.js's createPlugin(deps) and this package's README.
 let writeFileAtPath, fileExists;
 export function configure(deps) {
   ({ writeFileAtPath, fileExists } = deps);

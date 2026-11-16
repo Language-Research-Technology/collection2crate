@@ -1,15 +1,20 @@
 # collection2crate-plugins
 
-Build plugins for [collection2crate](https://github.com/Language-Research-Technology/collection2crate) —
-split out of that repo's `src/plugins/` so a deployment can pick which
-plugins it bundles instead of shipping all of them.
+Build plugins for collection2crate — kept as their own package, separate
+from the app's `src/plugins/`, so a deployment can pick which plugins it
+bundles instead of shipping all of them.
 
-This package has **no runtime dependency on collection2crate**. Every plugin
-here is a factory, `createPlugin(deps)`, that collection2crate calls with the
-specific functions from its own `crate.js`/`fs_helpers.js`/`github.js`/
-`masp.js` that plugin needs. That's what lets this repo be developed,
-tested, and version-controlled independently, with no circular package
-dependency between the two repos.
+This is the `collection2crate-plugins` workspace (`packages/plugins/`) of
+the [collection2crate](https://github.com/Language-Research-Technology/collection2crate)
+repo; the app is the `collection2crate` workspace beside it (`packages/app/`).
+It used to be a repo of its own, and its history came with it.
+
+This package has **no runtime dependency on the app**. Every plugin here is
+a factory, `createPlugin(deps)`, that the app calls with the specific
+functions from its own `crate.js`/`fs_helpers.js`/`github.js`/`masp.js` that
+plugin needs. That keeps the dependency one-way — the app depends on the
+plugins, never the reverse — so no plugin reaches into the app's files and
+the package can still be tested on its own.
 
 ## Layout
 
@@ -63,10 +68,19 @@ where they come from, and what each of the three panels does.
 
 ## Consuming this package
 
-collection2crate depends on it as `"collection2crate-plugins": "file:../collection2crate-plugins"` (a
-sibling checkout) and imports `REGISTRY` from `index.js`, filtering it by
-its `PLUGINS` env var before calling each selected factory. See collection2crate's `SPEC.md` and `src/plugins/index.js`
-for the consuming side.
+The app depends on it as `"collection2crate-plugins": "*"`, which npm
+resolves to this workspace, and imports `REGISTRY` from `index.js`, filtering
+it by its `PLUGINS` env var before calling each selected factory. See
+`packages/app/SPEC.md` §4.7a and `packages/app/src/plugins/index.js` for the
+consuming side.
+
+Install from the repo root, never from this folder: `npm install` there
+installs both workspaces' dependencies into the one root `node_modules` and
+`package-lock.json`. To add a dependency to this package:
+
+```bash
+npm install <package> -w collection2crate-plugins
+```
 
 ## The two conventions every plugin here follows
 
@@ -107,7 +121,7 @@ are carried between the two runs untouched.
 
 If collection2crate ever renames one of these, every plugin here keyed to the
 old string silently stops firing — there's no import to break loudly. Grep
-this repo for the old string when that happens.
+the repo (both packages) for the old string when that happens.
 
 These replaced an earlier, smaller set: `"config:prepare"` is now
 `"crate:prepare"`, `"files:analyze"` is now `"files:prepare"`, and
@@ -131,7 +145,7 @@ hooks: {
 },
 ```
 
-`priority` is explicit on every tap in this repo rather than left to the
+`priority` is explicit on every tap in this package rather than left to the
 default (10) plus stable-sort registration order, so a plugin's position in
 a stage is a property of the plugin itself and survives being filtered out
 of, or reordered in, a deployment's `PLUGINS` selection. The numbers are
@@ -284,7 +298,7 @@ worth reading in the transcript; report progress separately.
 
 Always go through `progressFor(ctx)` (`src/_progress.js`) rather than
 touching `ctx.progress` directly. It returns the same three-call shape on a
-host that has no `ctx.progress` at all, so a plugin from this repo still
+host that has no `ctx.progress` at all, so a plugin from this package still
 runs under an older collection2crate instead of throwing partway through a build.
 
 `countedProgress(ctx, total, label)` from the same module wraps the common
@@ -297,9 +311,13 @@ were unreadable.
 ### Testing
 
 ```bash
-npm test          # hooks.test.mjs — the hook/priority/progress contract
-npm run test:pronom
+npm test -w collection2crate-plugins              # every suite in this package
+npm run test:hooks -w collection2crate-plugins    # hooks.test.mjs — the hook/priority/progress contract
+npm run test:pronom -w collection2crate-plugins
 ```
+
+Run from the repo root (`npm test` there runs the app's suites and these),
+or from this folder without the `-w`.
 
 `hooks.test.mjs` constructs every plugin in `REGISTRY` against a stub `deps` and asserts the parts of the contract that fail
 *silently* rather than loudly: a tap keyed to a hook name collection2crate no
@@ -308,7 +326,7 @@ of the bar, and two taps sharing a priority in one stage quietly fall back
 to registration order. It also prints the resolved execution order per
 stage, which is the quickest way to see what a priority change actually
 did. The list of valid hook names is duplicated there rather than imported
-— this package has no runtime dependency on collection2crate, so accepting a
+— this package has no runtime dependency on the app, so accepting a
 contract change from the other side is a deliberate edit to that list.
 
 **2. Every plugin module exports `createPlugin(deps)`**, not a static
@@ -628,6 +646,7 @@ the files are still written to the folder. A profile shows the option by
 naming its key in `enabledOptionKeys`, and starts it ticked by listing it in
 `plugins` (the ldac profile does both).
 
-Then register it in this repo's `index.js` (`REGISTRY` — one registry, for
-builders and annotating plugins alike), and in collection2crate's
-`src/plugins/index.js`, wire up the `deps` object it's called with.
+Then register it in this package's `index.js` (`REGISTRY` — one registry, for
+builders and annotating plugins alike). If it needs a core function the app
+doesn't hand over yet, add it to `buildDeps()` in
+`packages/app/src/plugins/deps.js`.

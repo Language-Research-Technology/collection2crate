@@ -426,7 +426,7 @@ priority 10, `docx-input` a gated builder at 5. Adding a way to read a folder �
 an archive import, an OAI-PMH harvest — is adding a plugin with an option, and
 touches nothing in the host.
 
-**This `src/plugins/index.js` is generated, not hand-written** (see §4.7a below) — the plugin *implementations* are in a sibling repo, `collection2crate-plugins`.
+**This `src/plugins/index.js` is generated, not hand-written** (see §4.7a below) — the plugin *implementations* are in the `collection2crate-plugins` workspace, `packages/plugins/`.
 
 **Ordering.** Array order in `PLUGINS` *is* hook-execution order for plugins sharing a stage at equal priority. Every registration defaults to priority 10 and `Array#sort` is stable, so registering in this order reproduces the original inline sequence with no explicit priority numbers: `xlsx-crate-input` first so the entities it contributes exist for the two that read the graph after it, then AUSTLANG before merge (all three tap `files:prepare`), and JSON before XLSX before HTML (all tap `crate:write`). Every plugin in `collection2crate-plugins` now declares its priority explicitly anyway, so the array order is documentation rather than mechanism.
 
@@ -452,7 +452,7 @@ A third, optional field composes the same way: `outputPaths`, an array of `{ pat
 
 ### 4.7 Writing a new plugin
 
-Plugin implementations live in the sibling `collection2crate-plugins` repo (§4.7a)
+Plugin implementations live in the `collection2crate-plugins` workspace, `packages/plugins/` (§4.7a)
 
 Plugins can subscribe to a hook with a priority 0-100 (lower meaning they run earlier). 
 
@@ -489,20 +489,20 @@ Then register it in collection2crate-plugins' own `index.js` (`REGISTRY`, keyed 
 
 Four conventions worth following: **guard on your own option first** (handlers run on every build); **dynamic-import anything heavy** so it stays out of the main bundle; **log through `ctx.log`** rather than `console`; and **write a user-facing doc** if the plugin asks anything of the *person preparing content or running a build* — an authoring convention (headings, filename patterns, magic strings like `SOUND FILE:`), an option whose effect isn't self-explanatory from its label, or an expected file/config shape it reads. That doc is for the plugin's users, not its maintainers — this section and the rest of this file are the latter. It belongs under `docs/` (see §11), linked from the README rather than folded into it, following the pattern `docs/docx-authoring.md` set for `docx-input` (§7.1). A plugin with no user-visible behaviour beyond a self-explanatory option toggle doesn't need one.
 
-Registering it in collection2crate-plugins' `REGISTRY` (above) is the path for a plugin that's joining that repo. It doesn't have to — §4.7a covers pulling a plugin in from somewhere else entirely: another repo built the same way (`PLUGINS=name=some-package`), or a one-off local file you're testing without touching any repo's registry at all (`PLUGINS=name=./path.js`).
+Registering it in collection2crate-plugins' `REGISTRY` (above) is the path for a plugin that's joining that package. It doesn't have to — §4.7a covers pulling a plugin in from somewhere else entirely: another repo built the same way (`PLUGINS=name=some-package`), or a one-off local file you're testing without touching any repo's registry at all (`PLUGINS=name=./path.js`).
 
-### 4.7a The collection2crate-plugins repo
+### 4.7a The collection2crate-plugins package
 
-Every plugin under §7's catalogue — the builders included — lives in `collection2crate-plugins`, a sibling checkout (`../collection2crate-plugins` next to this repo).The plugin *engine* is in this repo's `src` dir: `src/plugins/hooks.js` (the hook bus and `HOOKS` constants) and `src/plugins/pipeline.js` (orchestration), plus the isomorphic core every plugin reaches into — `src/crate.js`, `src/fs_helpers.js`, `src/github.js`, `src/masp.js`.
+This repo is an [npm workspaces](https://docs.npmjs.com/cli/v8/using-npm/workspaces) monorepo: the app is the `collection2crate` workspace (`packages/app/`, where this spec lives) and every plugin under §7's catalogue — the builders included — lives in the `collection2crate-plugins` workspace (`packages/plugins/`). The plugin *engine* is in the app's `src` dir: `src/plugins/hooks.js` (the hook bus and `HOOKS` constants) and `src/plugins/pipeline.js` (orchestration), plus the isomorphic core every plugin reaches into — `src/crate.js`, `src/fs_helpers.js`, `src/github.js`, `src/masp.js`.
 
-**collection2crate-plugins has no runtime dependency on this repo.** Two conventions make that possible, both covered in collection2crate-plugins' own README:
+**collection2crate-plugins has no runtime dependency on the app**, even though they now share a repo. Two conventions make that possible, both covered in collection2crate-plugins' own README (`packages/plugins/README.md`):
 
 - Hook names are literal strings (`"crate:build"`, `"crate:write"`, …) rather than an imported `HOOKS.CRATE_BUILD` — a stable contract owned by `src/plugins/hooks.js`, just not one collection2crate-plugins imports to use.
 - Every plugin module exports `createPlugin(deps)` instead of a static `plugin` object. `deps` is collection2crate's core functions, built once by `src/plugins/deps.js`'s `buildDeps()` (the same full object handed to every plugin — an unused key is simply never read) and passed to each selected plugin's factory.
 
-Collection2crate depends on collection2crate-plugins as `"collection2crate-plugins": "file:../collection2crate-plugins"` — a local, symlinked dependency; not yet published to npm.
+The app depends on it as `"collection2crate-plugins": "*"`, which npm resolves to the workspace: `npm install` at the repo root links `node_modules/collection2crate-plugins` to `packages/plugins/` and installs both packages' dependencies into one root `node_modules` and one `package-lock.json`. Neither package is published to npm. Because the link resolves to a path outside `node_modules`, Vite treats the plugins as source code — it watches them in dev and pre-bundles their CommonJS dependencies itself — so `vite.config.js` needs no special handling for them.
 
-**It is a fork of `c2c-plugins`, taken at the point input modes were dissolved (§4.4).** `c2c-plugins` stays on the old contract — a second `INPUT_REGISTRY` of mutually-exclusive input-mode plugins, dispatched on `ctx.options.inputMode` — because `chaos2crate`, this app's predecessor, still consumes it that way and would fail at import against the new shape (the export is simply gone). The two repos share history up to the fork and nothing after it; a fix that matters to both has to be applied to both.
+**It is a fork of `c2c-plugins`, taken at the point input modes were dissolved (§4.4).** `c2c-plugins` stays on the old contract — a second `INPUT_REGISTRY` of mutually-exclusive input-mode plugins, dispatched on `ctx.options.inputMode` — because `chaos2crate`, this app's predecessor, still consumes it that way and would fail at import against the new shape (the export is simply gone). The two share history up to the fork and nothing after it (that history now lives under `packages/plugins/` here); a fix that matters to both has to be applied to both.
 
 **Build-time plugin selection.** Not every deployment needs every plugin (`ca-data-prep` is specific to one dataset, for instance), so `src/plugins/index.js` is generated rather than hand-written: `node scripts/select-plugins.mjs` reads a `PLUGINS` env var (comma-separated plugin names; unset or `all` means everything) and writes `src/plugins/index.js` with static imports for only the selected plugins, pulled from collection2crate-plugins' `REGISTRY` — one registry, builders included, so a deployment selects a builder the same way it selects anything else. A selection with no builder in it is a deployment that cannot build a crate; the pipeline says so on the first run rather than at generation time, since a build-time check can't know which builders a custom entry provides. A runtime filter over an already-imported registry wouldn't achieve real bundle-size exclusion — Rollup can't tree-shake based on which object keys get read at runtime — so exclusion has to happen by simply never writing the `import` statement for a plugin that wasn't selected.
 
@@ -515,8 +515,8 @@ The generator runs automatically before `dev`/`build`/`test` (package.json's `pr
 
 **A `PLUGINS` entry doesn't have to come from collection2crate-plugins.** Each entry is either a bare name (collection2crate-plugins' `REGISTRY`, validated, ordered by `REGISTRY`'s own hook-execution order — the default and the common case), or `name=source`:
 
-- `name=some-package` — `some-package`'s own `plugins/<name>/index.js`, the same layout convention collection2crate-plugins itself follows. For a plugin repo meant to stick around, wire it into `package.json` as its own dependency first — `"other-plugins": "file:../other-plugins"` for another local checkout (same pattern as collection2crate-plugins itself), or `"other-plugins": "github:org/other-plugins"` for one pulled from elsewhere online — then `npm install`, then reference it this way. There's no runtime remote-loading mechanism here; "online repo" still means "installed as a real dependency before the build runs," same as collection2crate-plugins.
-- `name=./relative/path.js` or `name=/absolute/path.js` — an exact filesystem path (resolved against this repo's own root for a relative path), for a one-off local plugin you're testing without editing `package.json` at all.
+- `name=some-package` — `some-package`'s own `plugins/<name>/index.js`, the same layout convention collection2crate-plugins itself follows. For a plugin package meant to stick around, wire it into the app's `package.json` as its own dependency first — another workspace under `packages/` (same pattern as collection2crate-plugins itself), `"other-plugins": "file:../other-plugins"` for a local checkout, or `"other-plugins": "github:org/other-plugins"` for one pulled from elsewhere online — then `npm install`, then reference it this way. There's no runtime remote-loading mechanism here; "online repo" still means "installed as a real dependency before the build runs," same as collection2crate-plugins.
+- `name=./relative/path.js` or `name=/absolute/path.js` — an exact filesystem path (a relative path is resolved against the app's own root, `packages/app/`), for a one-off local plugin you're testing without editing `package.json` at all.
 
 Either form just needs to export `createPlugin(deps)`, the same contract as every plugin in collection2crate-plugins — `deps` is the identical object `buildDeps()` produces, so an external or local plugin can read whatever core functions it needs the same way. `select-plugins.mjs` dynamically imports every custom entry at generation time (before writing anything) specifically to catch a bad path or a missing `createPlugin` export immediately, with a clear message, rather than failing obscurely inside Vite later. Ordering: collection2crate-plugins' `REGISTRY` names keep their documented order; custom entries are appended after, in the order given in `PLUGINS` — there's no ordering information available for a plugin outside collection2crate-plugins' own registry, so place custom entries accordingly if they share a hook stage with something order-sensitive.
 
@@ -525,7 +525,8 @@ Either form just needs to export `createPlugin(deps)`, the same contract as ever
 PLUGINS=merge,special=other-plugins npm run build
 
 # a plugin file you're testing locally, not wired into package.json at all
-PLUGINS=merge,scratch=../scratch-plugin/index.js npm run build
+# (the path is relative to packages/app — this one is a folder beside the repo)
+PLUGINS=merge,scratch=../../../scratch-plugin/index.js npm run build
 ```
 
 ### 4.7b Quick start: writing your own plugin
@@ -534,7 +535,7 @@ The full description is §4.7/§4.7a above; this is the short version.
 
 1. **Create a file** exporting `createPlugin(deps)`, which returns a plugin object:
   ```js
-  // e.g. ../my-plugin/index.js
+  // e.g. ../../../my-plugin/index.js (beside the repo; paths are relative to packages/app)
   export function createPlugin(deps) {
       return {
       name: "my-plugin",
@@ -554,9 +555,9 @@ The full description is §4.7/§4.7a above; this is the short version.
 3. **Use `deps` for anything you need from collection2crate's core** (`crate.js`/`fs_helpers.js`/`github.js` functions) instead of importing them — e.g. `({ writeFileAtPath } = deps)` at the top of the file. This is what keeps a plugin decoupled and portable (§4.7a).
 4. **Point `PLUGINS` at it** — no `package.json` changes needed for a quick local file:
    ```bash
-   PLUGINS=merge,austlang,my-thing=../my-plugin/index.js npm run dev
+   PLUGINS=merge,austlang,my-thing=../../../my-plugin/index.js npm run dev
    ```
-5. **If it's meant to stick around**, turn it into its own small repo built like collection2crate-plugins (`plugins/<name>/index.js`), wire it into `package.json` (`"my-plugins": "file:../my-plugins"` or a `github:` URL), `npm install`, then reference it as `name=my-plugins` instead of a raw path.
+5. **If it's meant to stick around**, turn it into its own small package built like collection2crate-plugins (`plugins/<name>/index.js`) — a new workspace under `packages/`, or a repo of its own wired in with a `github:` URL — add it to the app's `package.json`, `npm install` at the repo root, then reference it as `name=my-plugins` instead of a raw path.
 6. **Add `pluginOptionsSchema`** if it should be toggleable in the Build panel, and make sure the active profile's `buildOptions.enabledOptionKeys` names your option key — otherwise it's off by default (§5.4).
 
 
@@ -901,7 +902,7 @@ Build as a Chromium web app (not React/Vue).
 
 The isomorphic core — `crate.js`, `masp.js`, `default_profile.js`, and the hook-bus engine (`hooks.js`, `pipeline.js`) — runs unmodified under Node. That is the whole reason it's isomorphic, and it's what the suite exercises: real `ro-crate`, real `ro-crate-excel`, real `ro-crate-static-site`, real `ro-crate-masp`. **Nothing is mocked.** A test that passes against a stub of `ro-crate` would prove nothing about a tool whose entire job is driving `ro-crate` correctly.
 
-**Plugin implementations are out of scope for this repo's tests, deliberately.** Every plugin lives in the sibling `collection2crate-plugins` repo (§4.7a); testing what a plugin actually does is that repo's job, not this one's. `test-hooks.mjs` still exercises the bus/pipeline machinery every plugin runs through, but only against small synthetic plugin objects defined inline in the test — never against a real plugin imported from `collection2crate-plugins`.
+**Plugin implementations are out of scope for the app's tests, deliberately.** Every plugin lives in the `collection2crate-plugins` workspace (§4.7a); testing what a plugin actually does is that package's own suite's job (`packages/plugins/*.test.mjs`), not this one's. `npm test` at the repo root runs both. `test-hooks.mjs` still exercises the bus/pipeline machinery every plugin runs through, but only against small synthetic plugin objects defined inline in the test — never against a real plugin imported from `collection2crate-plugins`.
 
 Below the line sits everything requiring a browser: `main.js`, the File System Access wrappers, and the DOM. `showDirectoryPicker` needs a native dialog, so the wizard's click-through cannot be automated here. That's a real limit, not an oversight — the mitigation is keeping logic *out* of `main.js` and in modules that can be reached from Node, which is why plugins own their behaviour and `main.js` mostly assembles `ctx`.
 
@@ -982,7 +983,7 @@ Five suites, run by `npm test`. Every one exits non-zero when the behaviour it c
 
 ### 9.5 Remaining gaps
 
-This repo's test suite deliberately never imports or exercises a real plugin from `collection2crate-plugins`. Every plugin under §7's catalogue — merge, place lookup, xlsx-crate-input, austlang, docx-input, file-format-identify, ca-data-prep, chat-export, roctable, validate-crate, and the three `crate:write` writers — lives in that sibling repo (§4.7a); testing what a plugin actually does is that repo's job, not this one's. An earlier version of this suite (`test-place-merge.mjs`) reached directly into `collection2crate-plugins/plugins/merge/xlsx.js` and `.../place_lookup.js` to test merge and place-lookup logic from here; it's been removed, and `test-hooks.mjs`'s own real-registry test (which registered the actual, generated `PLUGINS`) went with it, for the same reason — this suite exists to prove the isomorphic core and the hook-bus engine are correct, not to duplicate `collection2crate-plugins`' own test coverage of its plugins.
+The app's test suite deliberately never imports or exercises a real plugin from `collection2crate-plugins`. Every plugin under §7's catalogue — merge, place lookup, xlsx-crate-input, austlang, docx-input, file-format-identify, ca-data-prep, chat-export, roctable, validate-crate, and the three `crate:write` writers — lives in that workspace (§4.7a); testing what a plugin actually does is that package's job, not this one's. An earlier version of this suite (`test-place-merge.mjs`) reached directly into `collection2crate-plugins/plugins/merge/xlsx.js` and `.../place_lookup.js` to test merge and place-lookup logic from here; it's been removed, and `test-hooks.mjs`'s own real-registry test (which registered the actual, generated `PLUGINS`) went with it, for the same reason — this suite exists to prove the isomorphic core and the hook-bus engine are correct, not to duplicate `collection2crate-plugins`' own test coverage of its plugins.
 
 The **browser layer stays untestable here** (§9.1). The mitigation is architectural, not test-shaped: keep logic in modules Node can reach, so as little as possible depends on `main.js`'s own untested wiring.
 
@@ -1052,7 +1053,7 @@ vite.config.js                   shebang-stripping + preserveSymlinks (local fil
 index.html
 ```
 
-Every plugin implementation lives in the sibling `collection2crate-plugins` repo, not under this repo's `src/plugins/` (§4.7a) — this repo holds only the plugin *engine* (`hooks.js`, `pipeline.js`, `deps.js`) and the isomorphic core plugins reach into through it. `src/plugins/index.js` currently imports, by default ("all"), every plugin in `collection2crate-plugins`' registry:
+Every plugin implementation lives in the `collection2crate-plugins` workspace (`packages/plugins/`), not under the app's `src/plugins/` (§4.7a) — the app holds only the plugin *engine* (`hooks.js`, `pipeline.js`, `deps.js`) and the isomorphic core plugins reach into through it. `src/plugins/index.js` currently imports, by default ("all"), every plugin in `collection2crate-plugins`' registry:
 
 ```
 collection2crate-plugins/plugins/
@@ -1071,13 +1072,13 @@ collection2crate-plugins/plugins/
   ro-crate-html-output/index.js  crate:write — HTML + template resolution
 ```
 
-Each plugin is one folder under that repo's `plugins/`, named as the plugin
+Each plugin is one folder under that package's `plugins/`, named as the plugin
 names itself and as its `REGISTRY` keys it — which is what lets a `PLUGINS`
 entry resolve to `collection2crate-plugins/plugins/<name>/index.js` with no
 lookup table. What is shared between plugins rather than being one (the
-progress helper) sits outside `plugins/`, in that repo's `src/`.
+progress helper) sits outside `plugins/`, in that package's `src/`.
 
-That list — and each plugin's own internal file layout (`xlsx_crate.js`, `matcher.js`, `place_lookup.js`, `layout.js`, and so on) — is `collection2crate-plugins`' to document in its own repo, not this spec's; this file only tracks what `PLUGINS` currently resolves to.
+That list — and each plugin's own internal file layout (`xlsx_crate.js`, `matcher.js`, `place_lookup.js`, `layout.js`, and so on) — is `collection2crate-plugins`' to document in its own README, not this spec's; this file only tracks what `PLUGINS` currently resolves to.
 
 ---
 

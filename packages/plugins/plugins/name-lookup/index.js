@@ -10,7 +10,7 @@
 // finds it and fills it in rather than adding a second one.
 //
 // Hook names are literal strings and core collection2crate functions arrive
-// via createPlugin(deps) — see this repo's README.
+// via createPlugin(deps) — see this package's README.
 import { progressFor } from "../../src/_progress.js";
 import { generatedEntityId } from "../../src/_entity_ids.js";
 

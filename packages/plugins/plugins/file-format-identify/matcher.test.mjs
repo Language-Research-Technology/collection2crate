@@ -1,6 +1,6 @@
-// Matches this repo's plain-node-assert test style (see collection2crate's
-// tests/test-*.mjs) — no framework needed for a handful of fixture checks.
-// Run with: node src/file-format-identify/matcher.test.mjs
+// Matches this package's plain-node-assert test style (see the app's
+// packages/app/tests/test-*.mjs) — no framework needed for a handful of fixture checks.
+// Run with: npm run test:pronom -w collection2crate-plugins
 //
 // Exercises the real vendored sf.wasm (not a reimplementation) directly in
 // Node, via a minimal FileSystemFileHandle shim over a real on-disk file —

@@ -230,7 +230,7 @@ const plugin = {
 
 // Registers each .cha as a File entity so it's actually part of the RO-Crate,
 // not just a file sitting next to it. ca-data-prep runs before chat-export
-// (priority 50 vs 60 on crate:build — see this repo's README) and, when it
+// (priority 50 vs 60 on crate:build — see this package's README) and, when it
 // processes the same source file, will already have added a RepositoryObject
 // at "#<baseName>" with the docx/csv as hasPart — chat-export
 // computes that same id independently (both derive baseName from the source

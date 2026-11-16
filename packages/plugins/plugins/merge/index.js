@@ -7,7 +7,7 @@ import { progressFor } from "../../src/_progress.js";
 import { resolveMergeConfig } from "../../src/_merge_config.js";
 
 // Hook names are literal strings and core collection2crate functions arrive
-// via createPlugin(deps) — see this repo's README. graphEntityById (needed
+// via createPlugin(deps) — see this package's README. graphEntityById (needed
 // by xlsx.js's mergeXlsxIntoCrate) is threaded through as an extra argument
 // rather than injected separately, since it's only used inside that one call.
 let readJsonFromFolder, graphEntityById;

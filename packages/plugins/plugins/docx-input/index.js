@@ -19,7 +19,7 @@ import { progressFor } from "../../src/_progress.js";
 // used in a given session. It also needs one collection2crate core function
 // (writeFileAtPath) — createPlugin(deps) holds onto deps and hands it to
 // docx_crate.js's configure() once the dynamic import resolves, rather than
-// importing fs_helpers.js directly (see this repo's README).
+// importing fs_helpers.js directly (see this package's README).
 // Mirrors docx_crate.js's own (module-private) OUTPUT_FILES_DIR_NAME — kept
 // as a literal here rather than imported, since importing docx_crate.js
 // statically would defeat the whole point of dynamic-importing it below (it

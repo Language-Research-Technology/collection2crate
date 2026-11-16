@@ -1,6 +1,6 @@
 // buildDeps() — the one deps object every plugin factory receives (SPEC.md §4.7a).
 //
-// collection2crate-plugins has no runtime dependency on this repo: a plugin never imports
+// collection2crate-plugins has no runtime dependency on the app: a plugin never imports
 // crate.js or fs_helpers.js, it is handed the functions it declared needing.
 // The same full object goes to every factory — an unused key is simply never
 // read — so this stays one list rather than a per-plugin lookup table.
@@ -53,7 +53,7 @@ export function buildDeps() {
 
     // masp.js is handed over as a thunk, not as the functions themselves, so
     // ro-crate-masp (the whole validator library) stays dynamically imported
-    // from this repo's tree and collection2crate-plugins never statically references it.
+    // from the app's tree and collection2crate-plugins never statically references it.
     loadMasp: () => import("../masp.js"),
   };
 }

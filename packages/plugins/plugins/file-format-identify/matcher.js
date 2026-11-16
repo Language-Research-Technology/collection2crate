@@ -11,7 +11,7 @@
 // getFileHandleAtPath is a collection2crate core function, injected once via
 // configure() rather than imported by relative path — called from
 // file-format-identify/index.js's createPlugin(deps) before this module's
-// exports are used. See this repo's README.
+// exports are used. See this package's README.
 let getFileHandleAtPath;
 export function configure(deps) {
   ({ getFileHandleAtPath } = deps);

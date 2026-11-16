@@ -5,7 +5,7 @@
 // regardless of whether the plugin file itself is statically imported into
 // the registry — same shape as the austlang plugin.
 // Hook names are literal strings and core collection2crate functions arrive via
-// createPlugin(deps) — see this repo's README.
+// createPlugin(deps) — see this package's README.
 import { progressFor } from "../../src/_progress.js";
 
 let graphEntityById, coreDeps;

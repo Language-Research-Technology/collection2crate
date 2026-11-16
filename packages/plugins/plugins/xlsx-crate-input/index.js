@@ -13,7 +13,7 @@ import { progressFor } from "../../src/_progress.js";
 // Hook names are literal strings, and core collection2crate functions arrive
 // via createPlugin(deps) — including loadMasp, a thunk
 // (`() => import("../masp.js")`) that keeps the heavy validator dynamically
-// imported from collection2crate's own tree. See this repo's README.
+// imported from collection2crate's own tree. See this package's README.
 let readFileBytes, loadMasp;
 
 export function createPlugin(deps) {
