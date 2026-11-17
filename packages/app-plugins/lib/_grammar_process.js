@@ -1,5 +1,5 @@
 // Transcript processing driven by a saved grammar (plugins/transcript-grammar)
-// instead of the built-in convention in process.js.
+// instead of the built-in convention in _transcript.js.
 //
 // The result has exactly the shape processTranscriptText() returns — rows,
 // speakerMap, diagnostics, nonConforming, log — so everything downstream
@@ -14,7 +14,7 @@
 // into the turn above is recorded against its own line, and a turn whose
 // speaker nobody declared is flagged — never dropped.
 
-import { documentLines, parseWithGrammar, grammarPath, describeColumnRule, describeFixedColumn, SPEAKER_FIELDS, TURN_FIELDS } from "../../lib/_transcript_grammar.js";
+import { documentLines, parseWithGrammar, grammarPath, describeColumnRule, describeFixedColumn, SPEAKER_FIELDS, TURN_FIELDS } from "./_transcript_grammar.js";
 
 // The three section names the built-in convention abbreviates in the CSV.
 // A grammar's other section names go into the CSV as written.
@@ -75,7 +75,7 @@ export function processWithGrammar(text, grammar, { grammarName = grammar?.name 
       name: speaker.name || "",
       alternateName: orNull(speaker.alternateName),
       demographic: orNull(speaker.affiliation),
-      // Parenthesised, as process.js keeps it: chat-export reads it as the
+      // Parenthesised, as _transcript.js keeps it: chat-export reads it as the
       // CHAT @ID group field and strips the parentheses itself.
       affiliation: speaker.affiliation ? `(${speaker.affiliation})` : null,
       optionalCode,

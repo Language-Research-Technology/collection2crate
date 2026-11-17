@@ -6,10 +6,8 @@
 //   npm test -w collection2crate-plugins -- txt-transcripts.test.mjs
 import assert from "node:assert/strict";
 import { REGISTRY } from "../../index.js";
-import {
-  processTranscriptText, paragraphNumbersByLine, plainTextAsParagraphs, decodePlainText,
-  extractTranscriptText, selectTranscriptFiles, transcriptBaseName, transcriptMediaType,
-} from "./process.js";
+import { processTranscriptText, paragraphNumbersByLine, extractTranscriptText, selectTranscriptFiles, transcriptBaseName, transcriptMediaType } from "../../lib/_transcript.js";
+import { plainTextAsParagraphs, decodePlainText } from "../../lib/_document_text.js";
 import { documentLines, textToLines } from "../../lib/_transcript_grammar.js";
 
 let failures = 0;
