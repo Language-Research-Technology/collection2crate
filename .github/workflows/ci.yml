@@ -1,5 +1,5 @@
 # Tests and builds every pull request, so a change to either workspace
-# (packages/app or packages/plugins) is checked before it reaches main and
+# (packages/app or packages/app-plugins) is checked before it reaches main and
 # the Pages deploy.
 name: CI
 

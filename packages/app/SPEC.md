@@ -426,7 +426,7 @@ priority 10, `docx-input` a gated builder at 5. Adding a way to read a folder �
 an archive import, an OAI-PMH harvest — is adding a plugin with an option, and
 touches nothing in the host.
 
-**This `src/plugins/index.js` is generated, not hand-written** (see §4.7a below) — the plugin *implementations* are in the `collection2crate-plugins` workspace, `packages/plugins/`.
+**This `src/plugins/index.js` is generated, not hand-written** (see §4.7a below) — the plugin *implementations* are in the `collection2crate-plugins` workspace, `packages/app-plugins/`.
 
 **Ordering.** Array order in `PLUGINS` *is* hook-execution order for plugins sharing a stage at equal priority. Every registration defaults to priority 10 and `Array#sort` is stable, so registering in this order reproduces the original inline sequence with no explicit priority numbers: `xlsx-crate-input` first so the entities it contributes exist for the two that read the graph after it, then AUSTLANG before merge (all three tap `files:prepare`), and JSON before XLSX before HTML (all tap `crate:write`). Every plugin in `collection2crate-plugins` now declares its priority explicitly anyway, so the array order is documentation rather than mechanism.
 
@@ -452,7 +452,7 @@ A third, optional field composes the same way: `outputPaths`, an array of `{ pat
 
 ### 4.7 Writing a new plugin
 
-Plugin implementations live in the `collection2crate-plugins` workspace, `packages/plugins/` (§4.7a)
+Plugin implementations live in the `collection2crate-plugins` workspace, `packages/app-plugins/` (§4.7a)
 
 Plugins can subscribe to a hook with a priority 0-100 (lower meaning they run earlier). 
 
@@ -493,16 +493,16 @@ Registering it in collection2crate-plugins' `REGISTRY` (above) is the path for a
 
 ### 4.7a The collection2crate-plugins package
 
-This repo is an [npm workspaces](https://docs.npmjs.com/cli/v8/using-npm/workspaces) monorepo: the app is the `collection2crate` workspace (`packages/app/`, where this spec lives) and every plugin under §7's catalogue — the builders included — lives in the `collection2crate-plugins` workspace (`packages/plugins/`). The plugin *engine* is in the app's `src` dir: `src/plugins/hooks.js` (the hook bus and `HOOKS` constants) and `src/plugins/pipeline.js` (orchestration), plus the isomorphic core every plugin reaches into — `src/crate.js`, `src/fs_helpers.js`, `src/github.js`, `src/masp.js`.
+This repo is an [npm workspaces](https://docs.npmjs.com/cli/v8/using-npm/workspaces) monorepo: the app is the `collection2crate` workspace (`packages/app/`, where this spec lives) and every plugin under §7's catalogue — the builders included — lives in the `collection2crate-plugins` workspace (`packages/app-plugins/`). The plugin *engine* is in the app's `src` dir: `src/plugins/hooks.js` (the hook bus and `HOOKS` constants) and `src/plugins/pipeline.js` (orchestration), plus the isomorphic core every plugin reaches into — `src/crate.js`, `src/fs_helpers.js`, `src/github.js`, `src/masp.js`.
 
-**collection2crate-plugins has no runtime dependency on the app**, even though they now share a repo. Two conventions make that possible, both covered in collection2crate-plugins' own README (`packages/plugins/README.md`):
+**collection2crate-plugins has no runtime dependency on the app**, even though they now share a repo. Two conventions make that possible, both covered in collection2crate-plugins' own README (`packages/app-plugins/README.md`):
 
 - Hook names are literal strings (`"crate:build"`, `"crate:write"`, …) rather than an imported `HOOKS.CRATE_BUILD` — a stable contract owned by `src/plugins/hooks.js`, just not one collection2crate-plugins imports to use.
 - Every plugin module exports `createPlugin(deps)` instead of a static `plugin` object. `deps` is collection2crate's core functions, built once by `src/plugins/deps.js`'s `buildDeps()` (the same full object handed to every plugin — an unused key is simply never read) and passed to each selected plugin's factory.
 
-The app depends on it as `"collection2crate-plugins": "*"`, which npm resolves to the workspace: `npm install` at the repo root links `node_modules/collection2crate-plugins` to `packages/plugins/` and installs both packages' dependencies into one root `node_modules` and one `package-lock.json`. Neither package is published to npm. Because the link resolves to a path outside `node_modules`, Vite treats the plugins as source code — it watches them in dev and pre-bundles their CommonJS dependencies itself — so `vite.config.js` needs no special handling for them.
+The app depends on it as `"collection2crate-plugins": "*"`, which npm resolves to the workspace: `npm install` at the repo root links `node_modules/collection2crate-plugins` to `packages/app-plugins/` and installs both packages' dependencies into one root `node_modules` and one `package-lock.json`. Neither package is published to npm. Because the link resolves to a path outside `node_modules`, Vite treats the plugins as source code — it watches them in dev and pre-bundles their CommonJS dependencies itself — so `vite.config.js` needs no special handling for them.
 
-**It is a fork of `c2c-plugins`, taken at the point input modes were dissolved (§4.4).** `c2c-plugins` stays on the old contract — a second `INPUT_REGISTRY` of mutually-exclusive input-mode plugins, dispatched on `ctx.options.inputMode` — because `chaos2crate`, this app's predecessor, still consumes it that way and would fail at import against the new shape (the export is simply gone). The two share history up to the fork and nothing after it (that history now lives under `packages/plugins/` here); a fix that matters to both has to be applied to both.
+**It is a fork of `c2c-plugins`, taken at the point input modes were dissolved (§4.4).** `c2c-plugins` stays on the old contract — a second `INPUT_REGISTRY` of mutually-exclusive input-mode plugins, dispatched on `ctx.options.inputMode` — because `chaos2crate`, this app's predecessor, still consumes it that way and would fail at import against the new shape (the export is simply gone). The two share history up to the fork and nothing after it (that history now lives under `packages/app-plugins/` here); a fix that matters to both has to be applied to both.
 
 **Build-time plugin selection.** Not every deployment needs every plugin (`ca-data-prep` is specific to one dataset, for instance), so `src/plugins/index.js` is generated rather than hand-written: `node scripts/select-plugins.mjs` reads a `PLUGINS` env var (comma-separated plugin names; unset or `all` means everything) and writes `src/plugins/index.js` with static imports for only the selected plugins, pulled from collection2crate-plugins' `REGISTRY` — one registry, builders included, so a deployment selects a builder the same way it selects anything else. A selection with no builder in it is a deployment that cannot build a crate; the pipeline says so on the first run rather than at generation time, since a build-time check can't know which builders a custom entry provides. A runtime filter over an already-imported registry wouldn't achieve real bundle-size exclusion — Rollup can't tree-shake based on which object keys get read at runtime — so exclusion has to happen by simply never writing the `import` statement for a plugin that wasn't selected.
 
@@ -902,7 +902,7 @@ Build as a Chromium web app (not React/Vue).
 
 The isomorphic core — `crate.js`, `masp.js`, `default_profile.js`, and the hook-bus engine (`hooks.js`, `pipeline.js`) — runs unmodified under Node. That is the whole reason it's isomorphic, and it's what the suite exercises: real `ro-crate`, real `ro-crate-excel`, real `ro-crate-static-site`, real `ro-crate-masp`. **Nothing is mocked.** A test that passes against a stub of `ro-crate` would prove nothing about a tool whose entire job is driving `ro-crate` correctly.
 
-**Plugin implementations are out of scope for the app's tests, deliberately.** Every plugin lives in the `collection2crate-plugins` workspace (§4.7a); testing what a plugin actually does is that package's own suite's job (`packages/plugins/*.test.mjs`), not this one's. `npm test` at the repo root runs both. `test-hooks.mjs` still exercises the bus/pipeline machinery every plugin runs through, but only against small synthetic plugin objects defined inline in the test — never against a real plugin imported from `collection2crate-plugins`.
+**Plugin implementations are out of scope for the app's tests, deliberately.** Every plugin lives in the `collection2crate-plugins` workspace (§4.7a); testing what a plugin actually does is that package's own suite's job (`packages/app-plugins/*.test.mjs`), not this one's. `npm test` at the repo root runs both. `test-hooks.mjs` still exercises the bus/pipeline machinery every plugin runs through, but only against small synthetic plugin objects defined inline in the test — never against a real plugin imported from `collection2crate-plugins`.
 
 Below the line sits everything requiring a browser: `main.js`, the File System Access wrappers, and the DOM. `showDirectoryPicker` needs a native dialog, so the wizard's click-through cannot be automated here. That's a real limit, not an oversight — the mitigation is keeping logic *out* of `main.js` and in modules that can be reached from Node, which is why plugins own their behaviour and `main.js` mostly assembles `ctx`.
 
@@ -1053,7 +1053,7 @@ vite.config.js                   shebang-stripping + preserveSymlinks (local fil
 index.html
 ```
 
-Every plugin implementation lives in the `collection2crate-plugins` workspace (`packages/plugins/`), not under the app's `src/plugins/` (§4.7a) — the app holds only the plugin *engine* (`hooks.js`, `pipeline.js`, `deps.js`) and the isomorphic core plugins reach into through it. `src/plugins/index.js` currently imports, by default ("all"), every plugin in `collection2crate-plugins`' registry:
+Every plugin implementation lives in the `collection2crate-plugins` workspace (`packages/app-plugins/`), not under the app's `src/plugins/` (§4.7a) — the app holds only the plugin *engine* (`hooks.js`, `pipeline.js`, `deps.js`) and the isomorphic core plugins reach into through it. `src/plugins/index.js` currently imports, by default ("all"), every plugin in `collection2crate-plugins`' registry:
 
 ```
 collection2crate-plugins/plugins/

@@ -2,7 +2,7 @@
 #
 # The repo's own files aren't a site: packages/app/index.html points at /src/
 # and main.js imports npm packages plus the collection2crate-plugins workspace
-# (packages/plugins). So the workspace is installed, built with Vite, and
+# (packages/app-plugins). So the workspace is installed, built with Vite, and
 # packages/app/dist/ is what gets published.
 #
 # Pages' source has to be "GitHub Actions" (Settings → Pages) for the deploy
