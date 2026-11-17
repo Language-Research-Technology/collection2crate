@@ -4,7 +4,7 @@
 // do). Which plugins appear here comes from the PLUGINS env var; see
 // SPEC.md §4.7a.
 //
-//   PLUGINS=generic-input,docx-input,xlsx-crate-input,austlang,file-format-identify,transcript-grammar,textcleaner,ca-data-prep,chat-export,merge,name-lookup,roctable,validate-crate,ro-crate-json-output,ro-crate-xlsx-output,ro-crate-html-output,concordance,ngrams,chart,sentimentexplorer,collocation,topicdetector,plots
+//   PLUGINS=generic-input,docx-input,xlsx-crate-input,austlang,file-format-identify,transcript-grammar,textcleaner,ca-data-prep,chat-export,merge,name-lookup,roctable,validate-crate,ro-crate-json-output,ro-crate-xlsx-output,ro-crate-html-output,concordance,ngrams,chart,sentimentexplorer,collocation,topicdetector,plots,textclassifier
 
 import { buildDeps } from "./deps.js";
 import { createPlugin as create_generic_input } from "collection2crate-plugins/plugins/generic-input/index.js";
@@ -30,6 +30,7 @@ import { createPlugin as create_sentimentexplorer } from "collection2crate-plugi
 import { createPlugin as create_collocation } from "collection2crate-plugins/plugins/collocation/index.js";
 import { createPlugin as create_topicdetector } from "collection2crate-plugins/plugins/topicdetector/index.js";
 import { createPlugin as create_plots } from "collection2crate-plugins/plugins/plots/index.js";
+import { createPlugin as create_textclassifier } from "collection2crate-plugins/plugins/textclassifier/index.js";
 
 // One deps object, built once, handed to every factory (SPEC.md §4.7a).
 const deps = buildDeps();
@@ -64,6 +65,7 @@ export const PLUGINS = [
   create_collocation(deps),
   create_topicdetector(deps),
   create_plots(deps),
+  create_textclassifier(deps),
 ];
 
 /** Every plugin's Build-panel option schema, in plugin order. */
