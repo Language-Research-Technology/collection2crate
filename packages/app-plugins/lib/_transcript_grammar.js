@@ -1445,3 +1445,28 @@ export function documentLines(text) {
   const mammothShaped = filled > 0 && spaced / filled >= 0.9;
   return textToLines(text, { paragraphs: mammothShaped });
 }
+
+/**
+ * The saved grammar this run parses with, or null for the built-in
+ * convention. Loaded once per run and kept on ctx, so ca-data-prep and
+ * chat-export — which parse the same documents — read them the same way, and so crate:build can
+ * tell whether the grammar has changed since.
+ *
+ * A grammar that was chosen but can't be read fails the run: quietly falling
+ * back to the built-in convention would produce a CSV from rules the person
+ * didn't ask for.
+ *
+ * `readText(dirHandle, path)` reads a file's text: the caller's own
+ * readFileTextFromDirectory from deps.
+ */
+export async function resolveTranscriptGrammar(ctx, readText) {
+  const name = String(ctx.options?.transcriptGrammar || "").trim();
+  if (!name) return null;
+  // Process starts from a fresh ctx, so anything already here was loaded
+  // earlier in this same run.
+  if (ctx.transcriptGrammar?.name === name) return ctx.transcriptGrammar;
+  if (!ctx.dirHandle) throw new Error(`Transcript grammar "${name}" was chosen, but no folder is open to read it from.`);
+  const grammar = await loadSavedGrammar(ctx.dirHandle, name, readText);
+  ctx.transcriptGrammar = { name, grammar, fingerprint: grammarFingerprint(grammar), path: grammarPath(name) };
+  return ctx.transcriptGrammar;
+}

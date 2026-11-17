@@ -9,7 +9,7 @@ import { REGISTRY } from "../index.js";
 import {
   outputsInCrateOption, includeOutputs, removeOutputEntities,
 } from "./_crate_outputs.js";
-import { buildRoCrateMetadata } from "../plugins/ca-data-prep/process.js";
+import { buildRoCrateMetadata } from "../plugins/ca-data-prep/outputs.js";
 import { OUTPUTS_OPTION_KEY as CSV_KEY } from "../plugins/ca-data-prep/index.js";
 import { OUTPUTS_OPTION_KEY as CHAT_KEY } from "../plugins/chat-export/index.js";
 

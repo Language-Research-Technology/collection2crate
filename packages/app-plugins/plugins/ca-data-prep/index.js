@@ -1,49 +1,25 @@
 import {
-  buildRoCrateMetadata,
   processTranscriptText,
   extractTranscriptText,
   selectTranscriptFiles,
   transcriptBaseName,
   transcriptMediaType,
-  buildSpeakerPersonEntities,
-  toCsv,
-} from "./process.js";
+} from "../../lib/_transcript.js";
+import { buildRoCrateMetadata, buildSpeakerPersonEntities, toCsv } from "./outputs.js";
 
 // Hook names are literal strings and writeFileAtPath (fs_helpers.js) arrives
 // via createPlugin(deps) — see this package's README.
 import { countedProgress } from "../../lib/_progress.js";
 import { outputsInCrateOption, includeOutputs, removeOutputEntities } from "../../lib/_crate_outputs.js";
 import {
-  GRAMMAR_CONFIG_DIR, grammarPath, grammarFingerprint, listSavedGrammars, loadSavedGrammar,
+  GRAMMAR_CONFIG_DIR, grammarPath, grammarFingerprint, listSavedGrammars, loadSavedGrammar, resolveTranscriptGrammar,
 } from "../../lib/_transcript_grammar.js";
 
-let writeFileAtPath, fileExists, readFileTextFromDirectory, mergeCrateInto;
+let writeFileAtPath, fileExists, readFileTextFromDirectory, readFileBytes, mergeCrateInto;
 
 export function createPlugin(deps) {
-  ({ writeFileAtPath, fileExists, readFileTextFromDirectory, mergeCrateInto } = deps);
+  ({ writeFileAtPath, fileExists, readFileTextFromDirectory, readFileBytes, mergeCrateInto } = deps);
   return plugin;
-}
-
-/**
- * The saved grammar this run parses with, or null for the built-in
- * convention. Loaded once per run and kept on ctx, so chat-export — which
- * parses the same documents — reads them the same way, and so crate:build can
- * tell whether the grammar has changed since.
- *
- * A grammar that was chosen but can't be read fails the run: quietly falling
- * back to the built-in convention would produce a CSV from rules the person
- * didn't ask for.
- */
-export async function resolveTranscriptGrammar(ctx, readText = readFileTextFromDirectory) {
-  const name = String(ctx.options?.transcriptGrammar || "").trim();
-  if (!name) return null;
-  // Process starts from a fresh ctx, so anything already here was loaded
-  // earlier in this same run.
-  if (ctx.transcriptGrammar?.name === name) return ctx.transcriptGrammar;
-  if (!ctx.dirHandle) throw new Error(`Transcript grammar "${name}" was chosen, but no folder is open to read it from.`);
-  const grammar = await loadSavedGrammar(ctx.dirHandle, name, readText);
-  ctx.transcriptGrammar = { name, grammar, fingerprint: grammarFingerprint(grammar), path: grammarPath(name) };
-  return ctx.transcriptGrammar;
 }
 
 export function addCsvFilesToCrate(crate, documentRecords) {
@@ -84,18 +60,6 @@ const CSV_DIR = "_outputs/csv";
 export const OUTPUTS_OPTION_KEY = "transcriptOutputsInCrate";
 const LOG_DIR = "_outputs/logs";
 
-export async function readDocxFileBytesFromDirHandle(dirHandle, relativePath) {
-  if (!dirHandle || !relativePath) return null;
-  const parts = String(relativePath).replace(/\\/g, "/").split("/").filter(Boolean);
-  if (!parts.length) return null;
-  let dir = dirHandle;
-  for (const part of parts.slice(0, -1)) {
-    dir = await dir.getDirectoryHandle(part, { create: false });
-  }
-  const fileHandle = await dir.getFileHandle(parts[parts.length - 1], { create: false });
-  return await (await fileHandle.getFile()).arrayBuffer();
-}
-
 const plugin = {
   name: "ca-data-prep",
   outputPaths: [
@@ -132,7 +96,7 @@ const plugin = {
 
         // Before the loop, so a missing or broken grammar fails the run once,
         // up front, rather than once per document.
-        const chosen = await resolveTranscriptGrammar(ctx);
+        const chosen = await resolveTranscriptGrammar(ctx, readFileTextFromDirectory);
         if (chosen) ctx.log(`Parsing transcripts with the grammar "${chosen.name}" (${chosen.path}).`, "muted");
 
         const documentRecords = [];
@@ -143,7 +107,7 @@ const plugin = {
           const filePath = file.relativePath || file.fileName || file.name || "";
           let buffer = file.arrayBuffer ? await file.arrayBuffer() : null;
           if (!buffer && ctx.dirHandle && filePath) {
-            buffer = await readDocxFileBytesFromDirHandle(ctx.dirHandle, filePath);
+            buffer = await readFileBytes(ctx.dirHandle, filePath);
           }
           if (!buffer) {
             ctx.log(`Skipped transcript processing for ${filePath || file.fileName || file.name || "unknown transcript"}: file bytes were unavailable.`, "warn");

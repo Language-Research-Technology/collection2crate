@@ -1,6 +1,5 @@
-import { ROCrate } from "ro-crate";
-import mammoth from "mammoth";
-import { processWithGrammar, formatMetadata, GRAMMAR_ISSUE_LABELS } from "./grammar_process.js";
+import { processWithGrammar, formatMetadata, GRAMMAR_ISSUE_LABELS } from "./_grammar_process.js";
+import { decodePlainText, extractDocumentText, plainTextAsParagraphs, resolveMammothArrayBuffer } from "./_document_text.js";
 
 // ---------------------------------------------------------------------------
 // The transcript grammar
@@ -107,7 +106,7 @@ export const ISSUE_LABELS = {
   "speaker-name-missing": "no speaker name found",
   "speaker-id-missing": "no #id found",
   "speaker-name-unbalanced-bracket": "unbalanced bracket in the speaker name",
-  // Findings only a saved grammar's reader produces (grammar_process.js).
+  // Findings only a saved grammar's reader produces (_grammar_process.js).
   ...GRAMMAR_ISSUE_LABELS,
 };
 
@@ -441,39 +440,6 @@ export function declaredCodeSet(speakerMap) {
   return codes;
 }
 
-// "#AA" and "Year of birth" → "#AA-year-of-birth".
-const propertyValueId = (entityId, label) => `${entityId}-${String(label).trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-+|-+$/g, "") || "property"}`;
-
-export function buildSpeakerPersonEntities(speakerMap) {
-  const entities = [];
-
-  for (const [speakerID, details] of speakerMap.entries()) {
-    const entityId = details.optionalCode ? details.optionalCode : `#${speakerID}`;
-    const entity = {
-      "@id": entityId,
-      "@type": "Person",
-      name: details.name || details.label || speakerID,
-    };
-
-    if (details.alternateName) entity.alternateName = details.alternateName;
-    if (details.affiliation) entity.affiliation = details.affiliation;
-    if (details.optionalCode) entity.identifier = details.optionalCode;
-    entities.push(entity);
-
-    // Fields a transcript grammar's own labels read from the declaration
-    // ("Role", "Age"): name/value pairs, each its own PropertyValue entity.
-    const extra = Object.entries(details.extra || {}).filter(([, value]) => String(value ?? "").trim());
-    if (extra.length) {
-      entity.additionalProperty = extra.map(([label]) => ({ "@id": propertyValueId(entityId, label) }));
-      for (const [label, value] of extra) {
-        entities.push({ "@id": propertyValueId(entityId, label), "@type": "PropertyValue", name: label, value: String(value).trim() });
-      }
-    }
-  }
-
-  return entities;
-}
-
 export function validateSectionOrder(foundSections, warnings = []) {
   const expected = ["PRELIMINARIES", "MAIN", "POSTLIMINARIES"];
   const actual = foundSections.slice();
@@ -720,30 +686,6 @@ export function stripTimecodes(text, removed = []) {
   for (const match of matches) removed.push(match);
   cleaned = cleaned.replace(pattern, "");
   return cleaned;
-}
-
-/**
- * The transcript CSV. `extraColumns` are the labels of a grammar's own
- * fields, each a column after the four every transcript has, filled from
- * `row.extra`.
- */
-export function toCsv(rows, extraColumns = []) {
-  const output = [["turnNumber", "speakerID", "text", "section", ...extraColumns.map(escapeCsv)].join(",")];
-  for (const row of rows) {
-    const turnNumber = escapeCsv(row.turnNumber || "");
-    const speakerID = escapeCsv(row.speakerID || "");
-    const text = escapeCsv(row.text || "");
-    const section = escapeCsv(row.section || "MAIN");
-    const extra = extraColumns.map((label) => `,${escapeCsv(row.extra?.[label] ?? "")}`).join("");
-    output.push(`${turnNumber},${speakerID},${text},${section}${extra}`);
-  }
-  return output.join("\n") + "\n";
-}
-
-export function escapeCsv(value) {
-  const stringValue = String(value ?? "");
-  if (/[",\n]/.test(stringValue)) return `"${stringValue.replace(/"/g, '""')}"`;
-  return stringValue;
 }
 
 const SECTION_RULE = "Section header rule: a header must be a complete line whose surrounding whitespace is trimmed and whose text exactly matches PRELIMINARIES, MAIN, or POSTLIMINARIES.";
@@ -1036,85 +978,6 @@ async function processTranscriptTextWithGrammar(text, config) {
   };
 }
 
-export async function resolveMammothArrayBuffer(docxSource) {
-  if (!docxSource) return null;
-
-  if (typeof Buffer !== "undefined" && Buffer.isBuffer(docxSource)) {
-    return docxSource.buffer.slice(docxSource.byteOffset, docxSource.byteOffset + docxSource.byteLength);
-  }
-
-  if (docxSource instanceof ArrayBuffer) {
-    return docxSource;
-  }
-
-  if (ArrayBuffer.isView(docxSource)) {
-    const view = docxSource;
-    const bytes = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
-    return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-  }
-
-  if (docxSource && typeof docxSource.arrayBuffer === "function") {
-    return await docxSource.arrayBuffer();
-  }
-
-  if (docxSource && typeof docxSource.buffer !== "undefined" && docxSource.buffer instanceof ArrayBuffer) {
-    const view = docxSource;
-    const bytes = new Uint8Array(view.buffer, view.byteOffset || 0, view.byteLength || view.buffer.byteLength);
-    return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-  }
-
-  return null;
-}
-
-// mammoth swaps its unzip implementation through package.json's "browser"
-// field: the browser build reads only { arrayBuffer }, the Node build only
-// { buffer } / { path }. Decide by runtime rather than by calling and catching.
-// Probing is what this used to do, and it is expensive in a way that doesn't
-// show up in tests: mammoth rejects through bluebird, which reports every
-// deliberate miss to the console as an unhandled rejection, so a four-document
-// folder filled the browser console with errors from a build that worked.
-const IN_BROWSER = typeof window !== "undefined" && typeof window.document !== "undefined";
-
-function toArrayBuffer(docxBuffer) {
-  if (docxBuffer instanceof ArrayBuffer) return docxBuffer;
-  if (ArrayBuffer.isView(docxBuffer)) {
-    const bytes = new Uint8Array(docxBuffer.buffer, docxBuffer.byteOffset, docxBuffer.byteLength);
-    return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-  }
-  return new Uint8Array(docxBuffer || []).buffer;
-}
-
-// Buffer can exist in a bundled browser build too (node polyfills), which is
-// why the runtime decides the shape and this only decides how to carry it.
-function mammothOptions(arrayBuffer, forBrowser) {
-  if (forBrowser) return { arrayBuffer };
-  if (typeof Buffer !== "undefined") return { buffer: Buffer.from(arrayBuffer) };
-  return { buffer: new Uint8Array(arrayBuffer) };
-}
-
-export async function callMammothExtractRawText(docxBuffer) {
-  const arrayBuffer = toArrayBuffer(docxBuffer);
-  try {
-    return await mammoth.extractRawText(mammothOptions(arrayBuffer, IN_BROWSER));
-  } catch (error) {
-    const message = error && typeof error.message === "string" ? error.message : String(error);
-    if (!/Could not find file in options/i.test(message)) throw error;
-    // The runtime guess was wrong — an exotic bundle, or jsdom in a test.
-    // One retry with the other shape, rather than failing on a readable file.
-    return await mammoth.extractRawText(mammothOptions(arrayBuffer, !IN_BROWSER));
-  }
-}
-
-export async function extractDocumentText(docxSource) {
-  if (!docxSource) return "";
-
-  const mammothBuffer = await resolveMammothArrayBuffer(docxSource);
-  if (!mammothBuffer) return "";
-
-  const result = await callMammothExtractRawText(mammothBuffer);
-  return result.value || "";
-}
-
 // ---------------------------------------------------------------------------
 // Transcript source files: .docx and .txt
 // ---------------------------------------------------------------------------
@@ -1165,32 +1028,6 @@ export function selectTranscriptFiles(entries, warn = () => {}) {
 }
 
 /**
- * Decode a plain-text file: UTF-8 unless a byte-order mark says UTF-16. The
- * mark itself is dropped, so it can't end up in front of the first header.
- */
-export function decodePlainText(bytes) {
-  const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-  let encoding = "utf-8";
-  if (view[0] === 0xff && view[1] === 0xfe) encoding = "utf-16le";
-  else if (view[0] === 0xfe && view[1] === 0xff) encoding = "utf-16be";
-  return new TextDecoder(encoding).decode(view);
-}
-
-/**
- * Give plain text the shape mammoth gives a .docx: each line a paragraph,
- * ended by a blank line. Everything downstream — the line numbers in the log
- * (paragraphNumbersByLine), a saved grammar's reader (documentLines) — then
- * treats a .txt line exactly as it treats a .docx paragraph, so a line
- * number in the log is that line's number in the file.
- */
-export function plainTextAsParagraphs(text) {
-  const lines = String(text || "").replace(/\r\n?/g, "\n").split("\n");
-  // A file's final newline ends its last line; it doesn't start another.
-  if (lines.length && lines[lines.length - 1] === "") lines.pop();
-  return lines.map((line) => `${line}\n\n`).join("");
-}
-
-/**
  * A transcript file's text, whichever kind it is: mammoth's extraction for a
  * .docx, the decoded file for a .txt.
  */
@@ -1199,79 +1036,4 @@ export async function extractTranscriptText(source, fileName) {
   const buffer = await resolveMammothArrayBuffer(source);
   if (!buffer) return "";
   return plainTextAsParagraphs(decodePlainText(buffer));
-}
-
-// conformsTo defaults to the LDAC Collection profile's own identity (this
-// function always builds a RepositoryCollection root) rather than hardcoding
-// it — the caller (ca-data-prep's "crate:build" hook) passes through
-// whichever profile the user actually selected, so a crate built here still
-// reflects that choice instead of silently overwriting it. The default only
-// matters when nothing was selected (e.g. calling this directly, as tests do).
-export function buildRoCrateMetadata(collectionName, documents, conformsTo = "https://w3id.org/ldac/profile#Collection", { includeOutputs = true } = {}) {
-  const crate = new ROCrate({ array: true, link: true });
-  // One entry for both prefixes: merged into a seeded crate, each entry
-  // would otherwise sit in its @context as one more object.
-  crate.addContext({ ldac: "https://w3id.org/ldac/terms#", pcdm: "http://pcdm.org/models#" });
-
-  crate.rootDataset["@id"] = "./";
-  crate.rootDataset["@type"] = ["Dataset", "RepositoryCollection"];
-  crate.rootDataset.name = collectionName;
-  crate.rootDataset.conformsTo = { "@id": conformsTo };
-  crate.descriptor.about = { "@id": "./" };
-
-  const collectionEntity = {
-    "@id": "./collection",
-    "@type": "RepositoryCollection",
-    name: collectionName,
-    hasMember: documents.map((document) => ({ "@id": document.objectId })),
-  };
-
-  crate.addEntity(collectionEntity);
-  crate.rootDataset.hasMember = documents.map((document) => ({ "@id": document.objectId }));
-
-  for (const document of documents) {
-    // Without its outputs, a document is its source file and its speakers: no CSV
-    // file, so no main text or annotation pointing at one.
-    const objectEntity = {
-      "@id": document.objectId,
-      "@type": "RepositoryObject",
-      name: document.baseName,
-      ...(includeOutputs ? { "ldac:mainText": { "@id": document.csvId } } : {}),
-      hasPart: [
-        { "@id": document.docxId },
-        ...(includeOutputs ? [{ "@id": document.csvId }] : []),
-      ],
-      speaker: document.speakerRefs,
-    };
-
-    const csvFileEntity = {
-      "@id": document.csvId,
-      "@type": "File",
-      name: document.csvName,
-      encodingFormat: "text/csv",
-      annotationOf: { "@id": document.docxId },
-      isPartOf: { "@id": document.objectId },
-    };
-
-    const annotationEntity = {
-      "@id": document.annotationId,
-      "@type": "Annotation",
-      annotationOf: { "@id": document.objectId },
-      annotationBody: { "@id": document.csvId },
-    };
-
-    crate.addEntity(objectEntity);
-    if (includeOutputs) crate.addEntity(annotationEntity);
-    crate.addEntity({
-      "@id": document.docxId,
-      "@type": "File",
-      name: document.docxName,
-      encodingFormat: document.sourceEncodingFormat || transcriptMediaType(document.docxName),
-    });
-    if (includeOutputs) crate.addEntity(csvFileEntity);
-
-    for (const person of document.persons) crate.addEntity(person);
-  }
-
-  return crate;
 }

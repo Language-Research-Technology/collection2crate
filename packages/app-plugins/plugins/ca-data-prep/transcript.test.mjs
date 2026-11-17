@@ -7,7 +7,8 @@
 //   npm test -w collection2crate-plugins -- transcript.test.mjs
 import assert from "node:assert/strict";
 
-import { processTranscriptText, toCsv, parseRows, mergeContinuationLines, normalizeText, parseSpeakerDetails, buildSpeakerPersonEntities, paragraphNumbersByLine, nearMissMarker } from "./process.js";
+import { processTranscriptText, parseRows, mergeContinuationLines, normalizeText, parseSpeakerDetails, paragraphNumbersByLine, nearMissMarker } from "../../lib/_transcript.js";
+import { toCsv, buildSpeakerPersonEntities } from "./outputs.js";
 
 let failures = 0;
 const check = async (label, fn) => {

@@ -3,7 +3,7 @@
 // here, and this module is itself only imported when the plugin's option is
 // on, so none of them reaches the main bundle of a build that never asks.
 import nlp from "compromise";
-import { extractDocumentText, decodePlainText } from "../ca-data-prep/process.js";
+import { extractDocumentText, decodePlainText } from "../../lib/_document_text.js";
 
 // What can be read as text. Anything else (audio, images, spreadsheets) is
 // skipped without a word — most of a language-resources folder isn't prose.

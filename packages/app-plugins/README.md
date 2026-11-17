@@ -30,10 +30,14 @@ lib/_panel.js            the DOM vocabulary those panels share
 lib/_tokenize.js         the word tokens the text-analysis panels count
 lib/_documents.js        which documents a panel analyses for the sources and columns picked
 lib/_transcript_grammar.js  transcript grammars: generation, parsing, saved-grammar I/O
+lib/_transcript.js       the CA transcript parser ca-data-prep and chat-export share, and which files are transcripts
+lib/_grammar_process.js  that parser's path for a saved transcript grammar
+lib/_document_text.js    a .docx (mammoth) or .txt read as text
 plugins/<name>/*.test.mjs   a plugin's own tests, next to its code
 lib/*.test.mjs           tests of the shared modules beside them
 tests/hooks.test.mjs     the hook/priority/progress contract, for every plugin in REGISTRY
 tests/panels.test.mjs    the panel contract, for every visualisation panel in REGISTRY
+tests/boundaries.test.mjs  no plugin imports from another plugin's folder
 scripts/run-tests.mjs    finds and runs every *.test.mjs (npm test)
 ```
 
@@ -42,7 +46,9 @@ itself and as `REGISTRY` keys it — that triple agreement is what lets a
 consumer resolve `collection2crate-plugins/plugins/<name>/index.js` from a
 `PLUGINS` selection without a lookup table, and `tests/hooks.test.mjs` asserts the
 registry key and `plugin.name` half of it. Anything shared between plugins
-rather than being one stays outside `plugins/`, in `lib/`.
+rather than being one stays outside `plugins/`, in `lib/`. A plugin never imports from another plugin's folder
+(`tests/boundaries.test.mjs` checks this): what two plugins share moves to
+`lib/`.
 
 ## Two kinds of plugin
 
@@ -357,12 +363,12 @@ handlers close over. Call it once, before the plugin's hooks can fire.
 | `xlsx-crate-input` | `readFileBytes`, `loadMasp` |
 | `austlang` | `addLanguageEntities` |
 | `file-format-identify` | `graphEntityById` (handed to `matcher.js`'s own `configure(deps)` on each dynamic import, for `getFileHandleAtPath`) |
-| `ca-data-prep` | `writeFileAtPath`, `fileExists`, `readFileTextFromDirectory` (reads the chosen transcript grammar), `mergeCrateInto` (lands the transcript crate in an existing one) |
-| `chat-export` | `writeFileAtPath`, `fileExists`, `readFileTextFromDirectory` (the chosen transcript grammar; its .docx/.txt reading goes through `ca-data-prep`'s own exports rather than `deps`) |
+| `ca-data-prep` | `writeFileAtPath`, `fileExists`, `readFileTextFromDirectory` (reads the chosen transcript grammar), `readFileBytes` (a transcript with no bytes of its own in `filesWithMeta`), `mergeCrateInto` (lands the transcript crate in an existing one) |
+| `chat-export` | `writeFileAtPath`, `fileExists`, `readFileTextFromDirectory` (the chosen transcript grammar), `readFileBytes` (a transcript with no bytes of its own); it parses with the same `lib/_transcript.js` as `ca-data-prep` |
 | `merge` | `readJsonFromFolder`, `graphEntityById` |
 | `name-lookup` | `readFileBytes` (only when a file in `filesWithMeta` has no `handle`), `readJsonFromFolder` (the folder's `merge-config.json`, for its place-lookup settings, and the gazetteer cache), `writeFileAtPath` (the gazetteer cache, `_config/name-lookup/`) |
 | `roctable` | `readJsonFromFolder`, `writeFileAtPath`, `getFileHandleAtPath`, `readFileTextFromDirectory`, `loadCrateFromJson` (lets "Configure tables…" inspect the folder's crate without a build running), `openModal` (the table-selection tree, `config-tree-ui.js`) |
-| `transcript-grammar` | `writeFileAtPath`, `readFileTextFromDirectory`, `openModal` (the three-step grammar editor and the tester, `ui.js`); its `.docx` reading goes through `ca-data-prep`'s `extractDocumentText`, imported on demand |
+| `transcript-grammar` | `writeFileAtPath`, `readFileTextFromDirectory`, `openModal` (the three-step grammar editor and the tester, `ui.js`); its `.docx` reading goes through `lib/_document_text.js`'s `extractDocumentText`, imported on demand |
 | `validate-crate` | `loadMasp` |
 | `concordance`, `ngrams`, `chart` (panels) | none — a panel receives its data in `ctx`, and never touches the folder |
 | `plots` (panel) | `readFileTextFromDirectory`, `writeFileAtPath`, `openModal` (loads and saves `_config/plots/config.json` in the selected folder) |
@@ -414,7 +420,7 @@ D:→hi                                                    ← unnumbered is equ
 It reads `.docx` and `.txt` files (as does `chat-export`). A `.txt` is
 decoded as UTF-8, or UTF-16 when it starts with that byte-order mark, and
 each of its lines is given the shape of a `.docx` paragraph before parsing
-(`plainTextAsParagraphs` in `process.js`), so both go through the same parser
+(`plainTextAsParagraphs` in `lib/_document_text.js`), so both go through the same parser
 and a line number in the log is the line's number in the file. A `.txt` with
 the same name as a `.docx` is skipped with a warning, since the two would
 write the same CSV and CHAT file. `plugins/ca-data-prep/txt-transcripts.test.mjs` covers this.
@@ -425,7 +431,7 @@ silently and completely rather than partially: every following line, section
 markers included, collapses into the last line the parser did recognise, and
 the CSV comes out as a header and nothing else. `plugins/ca-data-prep/transcript.test.mjs` pins
 the shapes that must parse; add to it before touching `SPEAKER_LINE` or
-`TURN_LINE` in `process.js`.
+`TURN_LINE` in `lib/_transcript.js`.
 
 `transcript-grammar` (`plugins/transcript-grammar/`) lets a person define that
 convention for their own documents instead of accepting it. It taps no build
