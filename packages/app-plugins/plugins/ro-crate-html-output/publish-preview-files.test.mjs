@@ -7,12 +7,12 @@
 // into ro-crate-preview-files/, and rewriteToPreviewFilesFolder redirects the
 // generated HTML's own links to those copies.
 //
-//   node publish-preview-files.test.mjs
+//   npm test -w collection2crate-plugins -- publish-preview-files.test.mjs
 import assert from "node:assert/strict";
 import { ROCrate } from "ro-crate";
 import {
   collectFilePaths, copyPublishedFilesToPreviewFolder, rewriteToPreviewFilesFolder, createPlugin,
-} from "./plugins/ro-crate-html-output/index.js";
+} from "./index.js";
 
 let failures = 0;
 const check = async (label, fn) => {

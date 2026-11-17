@@ -9,7 +9,7 @@
 //
 // Everything here is pure: no DOM, no file handles. The editor is the only
 // thing that knows about a folder, which is what makes the generation and the
-// parser testable in Node (transcript-grammar.test.mjs).
+// parser testable in Node (src/transcript-grammar.test.mjs).
 //
 // What a generated grammar deliberately does NOT carry is the sample text it
 // came from. The rows a person marks up are real speaker declarations — names,

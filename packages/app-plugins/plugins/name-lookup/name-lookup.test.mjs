@@ -4,13 +4,13 @@
 // holds under the name's @id and creating one otherwise. Offline: the
 // gazetteer is a stub here.
 //
-//   node name-lookup.test.mjs
+//   npm test -w collection2crate-plugins -- name-lookup.test.mjs
 import assert from "node:assert/strict";
 import { ROCrate } from "ro-crate";
-import { REGISTRY } from "./index.js";
-import { linkNamedEntities, confirmPlaces, addPlaceCoordinates, CACHE_PATH } from "./plugins/name-lookup/index.js";
-import { generatedEntityId } from "./src/_entity_ids.js";
-import { extractNames, fileText, isReadableForNames, parseNameList, createNameMatcher } from "./plugins/name-lookup/extract.js";
+import { REGISTRY } from "../../index.js";
+import { linkNamedEntities, confirmPlaces, addPlaceCoordinates, CACHE_PATH } from "./index.js";
+import { generatedEntityId } from "../../src/_entity_ids.js";
+import { extractNames, fileText, isReadableForNames, parseNameList, createNameMatcher } from "./extract.js";
 
 let failures = 0;
 const check = async (label, fn) => {
@@ -66,7 +66,7 @@ await check("@ids follow merge's scheme", () => {
 });
 
 await check("a Person merge made from a spreadsheet is the one a file links to", async () => {
-  const { mergeXlsxIntoCrate } = await import("./plugins/merge/xlsx.js");
+  const { mergeXlsxIntoCrate } = await import("../merge/xlsx.js");
   const { default: ExcelJS } = await import("exceljs");
   const book = new ExcelJS.Workbook();
   book.addWorksheet("Sheet1").addRows([["@id", "contentPerson", "location"], ["a.txt", "Dora Leung", "Mount Isa"]]);
@@ -240,7 +240,7 @@ await check("coordinates follow merge's region preference, from the folder's mer
 });
 
 await check("ties go to the region first, then to a populated place", async () => {
-  const { createPlaceLookupService } = await import("./src/_place_lookup.js");
+  const { createPlaceLookupService } = await import("../../src/_place_lookup.js");
   const county = { name: "Cairns", latitude: -22.6, longitude: 148.2, authority: "QLD", category: "ADMINISTRATIVE AREA", feature: "COUNTY" };
   const nswTown = { name: "Cairns", latitude: -30.0, longitude: 150.0, authority: "NSW", category: "POPULATED PLACE", feature: "LOCALITY" };
   const realFetch = globalThis.fetch;

@@ -2,7 +2,7 @@
 // destination path resolution, and plugin contract.
 //
 // Run with:
-//   node textcleaner.test.mjs
+//   npm test -w collection2crate-plugins -- textcleaner.test.mjs
 
 import assert from "node:assert/strict";
 import {
@@ -12,8 +12,8 @@ import {
   resolveDestinationPath,
   PREBUILT_RULES,
   escapeRegex,
-} from "./plugins/textcleaner/cleaner.js";
-import { createPlugin } from "./plugins/textcleaner/index.js";
+} from "./cleaner.js";
+import { createPlugin } from "./index.js";
 
 let failures = 0;
 const check = (label, fn) => {

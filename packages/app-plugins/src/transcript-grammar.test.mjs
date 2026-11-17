@@ -5,7 +5,7 @@
 // Names below are placeholders with no connection to any participant — see
 // "Names in fixtures" in the project notes.
 //
-//   node transcript-grammar.test.mjs
+//   npm test -w collection2crate-plugins -- transcript-grammar.test.mjs
 import assert from "node:assert/strict";
 import {
   SPEAKER_FIELDS, TURN_FIELDS, DEFAULT_GRAMMAR,
@@ -15,7 +15,7 @@ import {
   applyLayout, grammarLayout, dropColumns, columnRulesFor, columnRuleError, droppedColumnRanges,
   describeColumnRule, grammarFingerprint, buildFixedRowPattern, looksFixedWidth, describeFixedColumn, fixedColumnError,
   customFieldKey, customLabelError, turnFieldDefs, speakerFieldDefs,
-} from "./src/_transcript_grammar.js";
+} from "./_transcript_grammar.js";
 
 let failures = 0;
 const check = (label, fn) => {

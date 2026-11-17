@@ -28,14 +28,17 @@ src/_merge_config.js     which merge config a run uses (uploaded, folder, bundle
 src/_csv.js              CSV building and download, for visualisation panels
 src/_panel.js            the DOM vocabulary those panels share
 src/_transcript_grammar.js  transcript grammars: generation, parsing, saved-grammar I/O
-hooks.test.mjs           the hook/priority/progress contract test
-visualisation.test.mjs   the panels' pure seams: matching, counting, scaling
+plugins/<name>/*.test.mjs   a plugin's own tests, next to its code
+src/*.test.mjs           tests of the shared modules beside them
+tests/hooks.test.mjs     the hook/priority/progress contract, for every plugin in REGISTRY
+tests/panels.test.mjs    the panel contract, for every visualisation panel in REGISTRY
+scripts/run-tests.mjs    finds and runs every *.test.mjs (npm test)
 ```
 
 One folder per plugin under `plugins/`, named exactly as the plugin names
 itself and as `REGISTRY` keys it — that triple agreement is what lets a
 consumer resolve `collection2crate-plugins/plugins/<name>/index.js` from a
-`PLUGINS` selection without a lookup table, and `hooks.test.mjs` asserts the
+`PLUGINS` selection without a lookup table, and `tests/hooks.test.mjs` asserts the
 registry key and `plugin.name` half of it. Anything shared between plugins
 rather than being one stays outside `plugins/`, in `src/`.
 
@@ -238,7 +241,7 @@ builder standing; switching on `docxInput` puts a builder ahead of it and
 stands it down, folder scan (`files:prepare` at 0) included. A new builder
 needs a lower priority than the fallback and an option of its own for a
 profile to enable — nothing in the host changes. Exactly one builder in the
-registry may go ungated; `hooks.test.mjs` enforces that, since a second
+registry may go ungated; `tests/hooks.test.mjs` enforces that, since a second
 unconditional one could never run.
 
 **A builder adds to the run's crate; it never replaces it.** collection2crate
@@ -311,15 +314,26 @@ were unreadable.
 ### Testing
 
 ```bash
-npm test -w collection2crate-plugins              # every suite in this package
-npm run test:hooks -w collection2crate-plugins    # hooks.test.mjs — the hook/priority/progress contract
-npm run test:pronom -w collection2crate-plugins
+npm test -w collection2crate-plugins                  # every test in this package
+npm test -w collection2crate-plugins -- name-lookup   # only files whose path contains "name-lookup"
+npm test -w collection2crate-plugins -- hooks file-format  # several filters run any that match
 ```
 
 Run from the repo root (`npm test` there runs the app's suites and these),
 or from this folder without the `-w`.
 
-`hooks.test.mjs` constructs every plugin in `REGISTRY` against a stub `deps` and asserts the parts of the contract that fail
+A test lives next to what it tests, and `scripts/run-tests.mjs` finds every
+`*.test.mjs` under `plugins/`, `src/` and `tests/`, so a new one runs without
+being listed anywhere:
+
+- `plugins/<name>/<topic>.test.mjs` for a plugin's own behaviour;
+- `src/<topic>.test.mjs` for a shared module in `src/`;
+- `tests/` for checks that hold for every plugin in `REGISTRY`.
+
+Each file is a plain Node script using `node:assert`, run from the package
+root, that exits non-zero when a check fails.
+
+`tests/hooks.test.mjs` constructs every plugin in `REGISTRY` against a stub `deps` and asserts the parts of the contract that fail
 *silently* rather than loudly: a tap keyed to a hook name collection2crate no
 longer emits never fires, a tap left as a bare function never gets a slice
 of the bar, and two taps sharing a priority in one stage quietly fall back
@@ -401,13 +415,13 @@ each of its lines is given the shape of a `.docx` paragraph before parsing
 (`plainTextAsParagraphs` in `process.js`), so both go through the same parser
 and a line number in the log is the line's number in the file. A `.txt` with
 the same name as a `.docx` is skipped with a warning, since the two would
-write the same CSV and CHAT file. `txt-transcripts.test.mjs` covers this.
+write the same CSV and CHAT file. `plugins/ca-data-prep/txt-transcripts.test.mjs` covers this.
 
 A line that is not a turn is folded into the turn above it, which is what
 makes wrapped text work — and what makes an unrecognised turn shape fail
 silently and completely rather than partially: every following line, section
 markers included, collapses into the last line the parser did recognise, and
-the CSV comes out as a header and nothing else. `transcript.test.mjs` pins
+the CSV comes out as a header and nothing else. `plugins/ca-data-prep/transcript.test.mjs` pins
 the shapes that must parse; add to it before touching `SPEAKER_LINE` or
 `TURN_LINE` in `process.js`.
 
@@ -475,7 +489,7 @@ kept — delimiters, brackets, which fields are optional — never its text,
 since the rows marked up are real speaker declarations. `parseWithGrammar(text,
 grammar)` is pure; it and the folder helpers live in
 `src/_transcript_grammar.js`, since three plugins use them.
-`transcript-grammar.test.mjs` covers generation and parsing.
+`src/transcript-grammar.test.mjs` covers generation and parsing.
 
 **Parsing with a saved grammar.** `ca-data-prep`'s `transcriptGrammar` option
 (a child of "Process plain transcript documents", listing the grammars saved
@@ -497,7 +511,7 @@ so nothing downstream knows which reader ran. Differences worth knowing:
   warns if the saved grammar has changed since (re-saving the same markup
   does not count).
 
-`transcript-with-grammar.test.mjs` covers this, including that the grammar
+`plugins/ca-data-prep/transcript-with-grammar.test.mjs` covers this, including that the grammar
 marked up from the built-in convention's own fixture reproduces the built-in
 reader row for row.
 

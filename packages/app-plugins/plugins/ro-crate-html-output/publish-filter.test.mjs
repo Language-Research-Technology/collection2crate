@@ -27,10 +27,10 @@
 // don't). The filter has to discover such children via the crate's live
 // @reverse index, not just forward hasPart/hasMember/pcdm:hasMember.
 //
-//   node publish-filter.test.mjs
+//   npm test -w collection2crate-plugins -- publish-filter.test.mjs
 import assert from "node:assert/strict";
 import { ROCrate } from "ro-crate";
-import { filterCrateToPublished } from "./plugins/ro-crate-html-output/index.js";
+import { filterCrateToPublished } from "./index.js";
 
 let failures = 0;
 const check = async (label, fn) => {

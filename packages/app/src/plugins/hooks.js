@@ -4,7 +4,7 @@
 // package deliberately does NOT import this file — it uses the literal
 // strings — so renaming one here does not break loudly in the plugins; the
 // tap simply never fires. Changing a name is therefore a coordinated edit
-// across both packages (and packages/app-plugins/hooks.test.mjs carries its own
+// across both packages (and packages/app-plugins/tests/hooks.test.mjs carries its own
 // copy of this list to assert against).
 
 export const HOOKS = Object.freeze({

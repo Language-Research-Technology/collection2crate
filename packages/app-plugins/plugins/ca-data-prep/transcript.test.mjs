@@ -4,10 +4,10 @@
 // this produces, so a line shape it fails to recognise doesn't produce a
 // warning: it produces an empty CSV.
 //
-//   node transcript.test.mjs
+//   npm test -w collection2crate-plugins -- transcript.test.mjs
 import assert from "node:assert/strict";
 
-import { processTranscriptText, toCsv, parseRows, mergeContinuationLines, normalizeText, parseSpeakerDetails, buildSpeakerPersonEntities, paragraphNumbersByLine, nearMissMarker } from "./plugins/ca-data-prep/process.js";
+import { processTranscriptText, toCsv, parseRows, mergeContinuationLines, normalizeText, parseSpeakerDetails, buildSpeakerPersonEntities, paragraphNumbersByLine, nearMissMarker } from "./process.js";
 
 let failures = 0;
 const check = async (label, fn) => {

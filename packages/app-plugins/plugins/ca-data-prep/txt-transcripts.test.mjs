@@ -3,14 +3,14 @@
 // so the two kinds of file go through one parser and one report — these
 // checks hold that the shape really is the same.
 //
-//   node txt-transcripts.test.mjs
+//   npm test -w collection2crate-plugins -- txt-transcripts.test.mjs
 import assert from "node:assert/strict";
-import { REGISTRY } from "./index.js";
+import { REGISTRY } from "../../index.js";
 import {
   processTranscriptText, paragraphNumbersByLine, plainTextAsParagraphs, decodePlainText,
   extractTranscriptText, selectTranscriptFiles, transcriptBaseName, transcriptMediaType,
-} from "./plugins/ca-data-prep/process.js";
-import { documentLines, textToLines } from "./src/_transcript_grammar.js";
+} from "./process.js";
+import { documentLines, textToLines } from "../../src/_transcript_grammar.js";
 
 let failures = 0;
 const check = async (label, fn) => {

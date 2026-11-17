@@ -3,12 +3,12 @@
 //
 // Placeholder names only — see "Names in fixtures" in the project notes.
 //
-//   node transcript-with-grammar.test.mjs
+//   npm test -w collection2crate-plugins -- transcript-with-grammar.test.mjs
 import assert from "node:assert/strict";
-import { buildGrammar, documentLines, grammarFingerprint, grammarPath, listSavedGrammars } from "./src/_transcript_grammar.js";
-import { processTranscriptText, buildSpeakerPersonEntities, toCsv } from "./plugins/ca-data-prep/process.js";
-import { resolveTranscriptGrammar, warnIfGrammarChanged } from "./plugins/ca-data-prep/index.js";
-import { generateChatText } from "./plugins/chat-export/index.js";
+import { buildGrammar, documentLines, grammarFingerprint, grammarPath, listSavedGrammars } from "../../src/_transcript_grammar.js";
+import { processTranscriptText, buildSpeakerPersonEntities, toCsv } from "./process.js";
+import { resolveTranscriptGrammar, warnIfGrammarChanged } from "./index.js";
+import { generateChatText } from "../chat-export/index.js";
 
 let failures = 0;
 const check = async (label, fn) => {
