@@ -1,0 +1,29 @@
+{
+  "dataDir": "/opt/storage/origin/ro-crate",
+  "placeMatchRegion": "",
+  "sheet": "Files",
+  "mapping": [
+    {"source": "isRef_ldac:hasDerivation", "target": "ldac:hasDerivation", "type": "File"},
+    {"source": "isRef_ldac:derivationOf", "target": "ldac:derivationOf", "type": "File"},
+    {"source": "ldac:materialType", "target": "ldac:materialType"},
+    {"source": "encodingFormat", "target": "encodingFormat"},
+    {"source": "name", "target": "name"},
+    {"source": "description", "target": "description"},
+    {"source": "comment", "target": "comment"},
+    {"source": "datePublished", "target": "datePublished"},
+    {"source": "dateCreated", "target": "dateCreated"},
+    {"source": "custom:dateCaptured", "target": "custom:dateCaptured"},
+    {"source": "numberOfPages", "target": "numberOfPages"},
+    {"source": "custom:pageRange", "target": "custom:pageRange"},
+    {"source": ".language", "target": "ldac:subjectLanguage", "type": "Language"},
+    {"source": ".publisher", "target": "publisher", "type": "Organization"},
+    {"source": ".author", "target": "author", "type": "Person"},
+    {"source": "isRef_ldac:compiler", "target": "ldac:compiler", "type": "Person"},
+    {"source": ".contentPerson", "target": "custom:contentPerson", "type": "Person"},
+    {"source": ".participant", "target": "custom:participant", "type": "Person"},
+    {"source": ".location", "target": "contentLocation", "type": "Place"},
+    {"source": "isRef_license", "target": "license", "type": "License"},
+    {"source": "ldac:doi", "target": "ldac:doi"},
+    {"source": "url", "target": "url"}
+  ]
+}

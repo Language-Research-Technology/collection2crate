@@ -3,7 +3,7 @@
 // constants against collection2crate-plugins' documented contract.
 //
 // Deliberately NOT tested here: any real plugin from collection2crate-plugins. Testing what
-// a plugin does is that repo's job (SPEC.md §9.1); what this suite proves is
+// a plugin does is that package's own suite's job (SPEC.md §9.1); what this suite proves is
 // that the machinery every plugin runs through behaves as the contract says.
 // Every plugin object below is synthetic and defined inline.
 
@@ -21,7 +21,7 @@ const collectingCtx = (extra = {}) => {
 /* ---------- the HOOKS constants are the contract collection2crate-plugins keys to ---------- */
 
 // Duplicated from collection2crate-plugins' README rather than imported: that package has no
-// runtime dependency on this repo, so accepting a contract change from either
+// runtime dependency on the app, so accepting a contract change from either
 // side has to be a deliberate edit here.
 const CONTRACT_HOOK_NAMES = [
   "c2c:loaded", "folder:picked", "profile:selected",
