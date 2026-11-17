@@ -24,10 +24,10 @@ the [TopicDetector section](https://github.com/SLCLADAL/tools#-topicdetector--un
   files (all selected by default), and — for whichever selected files are
   CSV/TSV tables — one column multi-select per selected table (not one
   shared list), each defaulting to that table's own `text` column when
-  present, else every column. Reuse or closely mirror
+  present, else every column. Use the shared
   `documentsForSelection(documents, tables, sources, columns)` from
-  `sentimentexplorer/index.js`, including its `Map<source, string[]>` form
-  for per-file column choices.
+  `lib/_documents.js`, including its `Map<source, string[]>` form for
+  per-file column choices.
 - Unlike `sentimentexplorer`, a document here is **one whole file** (matching
   the R app's `load_corpus`, one document per uploaded file), not a
   per-section merge of the selected sources' documents. Do not add a
@@ -109,9 +109,9 @@ pass, then read that guided pass's per-document topic assignments.
 
 Export at least:
 
-- `tokenize(text)` — Unicode-aware tokenisation, following this repo's
-  existing pattern (`\p{L}\p{M}\p{N}` with an optional internal apostrophe
-  or hyphen), then drop single-character and no-letter tokens.
+- `tokenize(text)` — the shared tokenisation in `lib/_tokenize.js`
+  (`\p{L}\p{M}\p{N}` with an optional internal apostrophe or hyphen), then
+  drop single-character and no-letter tokens.
 - `buildVocabulary(documentsTokens, { minTermFreq, minDocFreq, stopwords })`
   — the trimmed vocabulary and each document's filtered token list, plus
   which documents were dropped as empty.

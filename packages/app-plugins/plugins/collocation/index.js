@@ -6,8 +6,9 @@ import {
   attributionFooter, button, checkbox, dataTable, element, field, flashLabel, numberInput,
   note, resultsBar, select,
 } from "../../lib/_panel.js";
+import { documentsForSelection } from "../../lib/_documents.js";
+import { tokenize } from "../../lib/_tokenize.js";
 
-const TOKEN = /[\p{L}\p{M}\p{N}]+(?:['’\-][\p{L}\p{M}\p{N}]+)*/gu;
 const RESULT_COLUMNS = [
   "node", "collocate", "O", "E", "f_node", "f_collocate", "N", "OE", "MI", "MI2", "MI3",
   "G2", "tscore", "DeltaP12", "DeltaP21", "Fisher",
@@ -26,11 +27,6 @@ const MEASURES = [
 const MEASURE_IDS = new Set(MEASURES.map(([id]) => id));
 const log2 = (value) => Math.log(value) / Math.LN2;
 
-export function tokenize(text, ignoreCase = true) {
-  const tokens = String(text || "").match(TOKEN) || [];
-  return ignoreCase ? tokens.map((token) => token.toLocaleLowerCase()) : tokens;
-}
-
 export function parseNodes(raw, ignoreCase = true) {
   const values = Array.isArray(raw) ? raw : String(raw || "").split(",");
   const seen = new Set();
@@ -38,24 +34,6 @@ export function parseNodes(raw, ignoreCase = true) {
     .filter(Boolean)
     .map((value) => ignoreCase ? value.toLocaleLowerCase() : value)
     .filter((value) => !seen.has(value) && seen.add(value));
-}
-
-/** Build the analysis documents for one source and, for tables, its columns. */
-export function documentsForSelection(documents, tables, source, columns = []) {
-  if (!source || source === "__all__") return documents || [];
-  const table = (tables || []).find((candidate) => candidate.source === source);
-  if (!table) return (documents || []).filter((document) => document.source === source);
-
-  const selected = columns.length ? new Set(columns) : new Set(table.header);
-  return table.rows.map((cells, index) => ({
-    id: `${source}#${index}`,
-    source,
-    speaker: "",
-    text: table.header
-      .map((column, columnIndex) => selected.has(column) ? cells[columnIndex] || "" : "")
-      .filter(Boolean)
-      .join(" "),
-  })).filter((document) => document.text.trim());
 }
 
 // Lanczos log-gamma is enough for exact Fisher probabilities without adding a
@@ -133,7 +111,7 @@ function numericOption(value, fallback, min, max) {
 /** Calculate all collocation rows for one concatenated corpus. */
 export function analyzeCollocations(documents, options = {}) {
   const ignoreCase = options.ignoreCase !== false;
-  const tokens = (documents || []).flatMap((document) => tokenize(document?.text, ignoreCase));
+  const tokens = (documents || []).flatMap((document) => tokenize(document?.text, { lowercase: ignoreCase }));
   const nodes = parseNodes(options.nodes, ignoreCase);
   const spanLeft = numericOption(options.spanLeft, 5, 1, 20);
   const spanRight = numericOption(options.spanRight, 5, 1, 20);

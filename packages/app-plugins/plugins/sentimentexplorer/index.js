@@ -10,8 +10,9 @@ import {
   attributionFooter, button, checkbox, dataTable, element, field, flashLabel,
   note, resultsBar,
 } from "../../lib/_panel.js";
+import { documentsForSelection } from "../../lib/_documents.js";
+import { tokenize } from "../../lib/_tokenize.js";
 
-const TOKEN = /[\p{L}\p{M}\p{N}]+(?:['’\-][\p{L}\p{M}\p{N}]+)*/gu;
 const MAX_RENDERED_ROWS = 2000;
 const NRC_LEXICON_URL = "https://raw.githubusercontent.com/SLCLADAL/tools/main/sentimentexplorer/nrc_lexicon.csv";
 
@@ -95,13 +96,6 @@ const NRC_BIBTEX =
   "  doi     = {10.1111/j.1467-8640.2012.00460.x}\n" +
   "}";
 
-// Unicode-aware words, lowercased unconditionally — the R app always
-// lowercases before matching, and there is no case-sensitivity option here.
-export function tokenize(text) {
-  const tokens = String(text || "").match(TOKEN) || [];
-  return tokens.map((token) => token.toLocaleLowerCase());
-}
-
 /**
  * Annotate one section's tokens against the NRC lexicon.
  *
@@ -159,54 +153,11 @@ export function analyzeSentiment(documents, lexicon, { sectionOf = (doc) => doc.
     const text = bySection.get(name).map((document) => document.text || "").join(" ");
     // Not a spread push: a large corpus's token count can exceed the engine's
     // call-stack argument limit and throw "Maximum call stack size exceeded".
+    // Always lowercased: the R app lowercases before matching, and there is no
+    // case-sensitivity option here.
     for (const row of annotateSection(tokenize(text), name, lexicon)) annotated.push(row);
   }
   return { annotated, summary: buildSummary(annotated), sections: order };
-}
-
-/**
- * Build the analysis documents for one or more selected sources. `sources`
- * may be a single source string (back-compat), an array of sources, or
- * omitted/`null` for every loaded document; an explicit empty array means
- * nothing selected.
- *
- * `columns` picks which columns of a table source supply its text:
- *   - an array applies the same column names to every selected table
- *     (collocation's behavior, and this function's own back-compat form).
- *   - a `Map<source, string[]>` applies a different column list per source,
- *     so two files can each contribute a different named column.
- * Either way, a table with no explicit selection falls back to every column
- * in its own header.
- */
-export function documentsForSelection(documents, tables, sources, columns = []) {
-  if (sources == null) return documents || [];
-  const list = Array.isArray(sources) ? sources : [sources];
-  if (list.includes("__all__")) return documents || [];
-  if (!list.length) return [];
-
-  const columnsFor = (table) => {
-    const chosen = columns instanceof Map ? columns.get(table.source) : columns;
-    return chosen && chosen.length ? new Set(chosen) : new Set(table.header);
-  };
-  const result = [];
-  for (const source of list) {
-    const table = (tables || []).find((candidate) => candidate.source === source);
-    if (!table) {
-      result.push(...(documents || []).filter((document) => document.source === source));
-      continue;
-    }
-    const useColumns = columnsFor(table);
-    result.push(...table.rows.map((cells, index) => ({
-      id: `${source}#${index}`,
-      source,
-      speaker: "",
-      text: table.header
-        .map((column, columnIndex) => useColumns.has(column) ? cells[columnIndex] || "" : "")
-        .filter(Boolean)
-        .join(" "),
-    })).filter((document) => document.text.trim()));
-  }
-  return result;
 }
 
 // One clearly separated heading style for every top-level section of the
