@@ -2,12 +2,12 @@
 // TLCMap's GHAP search API, and how it reads the answer. Offline — fetch is
 // a stub that records what was asked and answers from a table.
 //
-//   node place-lookup.test.mjs
+//   npm test -w collection2crate-plugins -- place-lookup.test.mjs
 import assert from "node:assert/strict";
 import { ROCrate } from "ro-crate";
 import ExcelJS from "exceljs";
-import { createPlaceLookupService } from "./src/_place_lookup.js";
-import { REGISTRY } from "./index.js";
+import { createPlaceLookupService } from "./_place_lookup.js";
+import { REGISTRY } from "../index.js";
 
 let failures = 0;
 const check = async (label, fn) => {

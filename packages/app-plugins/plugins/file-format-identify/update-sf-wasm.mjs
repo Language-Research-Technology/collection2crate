@@ -38,7 +38,7 @@ async function main() {
   await rm(tmp, { recursive: true, force: true });
 
   console.log(`Updated sf.wasm and wasm_exec.js to v${VERSION} in ${DEST_DIR}`);
-  console.log("Remember to also check SIEGFRIED-LICENSE.txt is still current, and re-run npm run test:pronom.");
+  console.log("Remember to also check SIEGFRIED-LICENSE.txt is still current, and re-run npm test -- file-format-identify.");
 }
 
 main().catch((e) => {

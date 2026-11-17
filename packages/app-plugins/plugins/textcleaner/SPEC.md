@@ -274,7 +274,7 @@ The modal dialog opened from **Clean text files…** must provide:
 
 ## Testing requirements
 
-Provide comprehensive tests in a dedicated test suite (e.g. `textcleaner.test.mjs`):
+Provide comprehensive tests in a dedicated test suite (`textcleaner.test.mjs`, beside the plugin):
 
 - **Prebuilt removal tests:**
   - `tags`: strips simple and nested XML/HTML tags and attributes.

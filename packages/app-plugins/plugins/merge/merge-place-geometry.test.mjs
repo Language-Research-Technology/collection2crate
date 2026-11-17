@@ -3,11 +3,11 @@
 // every place name is in the lookup's own records, and fetch is a stub that
 // fails the test if anything reaches the network.
 //
-//   node merge-place-geometry.test.mjs
+//   npm test -w collection2crate-plugins -- merge-place-geometry.test.mjs
 import assert from "node:assert/strict";
 import { ROCrate } from "ro-crate";
 import ExcelJS from "exceljs";
-import { mergeXlsxIntoCrate } from "./plugins/merge/xlsx.js";
+import { mergeXlsxIntoCrate } from "./xlsx.js";
 
 let failures = 0;
 const check = async (label, fn) => {

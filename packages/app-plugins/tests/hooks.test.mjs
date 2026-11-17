@@ -9,11 +9,11 @@
 // { priority, weight, activeWhen, handler }: nothing errors, it just never
 // gets a slice of the progress bar.
 //
-//   node hooks.test.mjs
+//   npm test -w collection2crate-plugins -- hooks.test.mjs
 import assert from "node:assert/strict";
 import { ROCrate } from "ro-crate";
-import { REGISTRY } from "./index.js";
-import { progressFor, countedProgress } from "./src/_progress.js";
+import { REGISTRY } from "../index.js";
+import { progressFor, countedProgress } from "../src/_progress.js";
 
 // collection2crate's src/plugins/hooks.js owns this list; it is duplicated rather
 // than imported on purpose — this package has no runtime dependency on

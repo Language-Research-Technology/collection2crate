@@ -2,16 +2,16 @@
 // and chat-export generate (src/_crate_outputs.js). Real ro-crate; the plugins'
 // crate:build handlers are driven with a hand-built ctx.
 //
-//   node crate-outputs.test.mjs
+//   npm test -w collection2crate-plugins -- crate-outputs.test.mjs
 import assert from "node:assert/strict";
 import { ROCrate } from "ro-crate";
-import { REGISTRY } from "./index.js";
+import { REGISTRY } from "../index.js";
 import {
   outputsInCrateOption, includeOutputs, removeOutputEntities,
-} from "./src/_crate_outputs.js";
-import { buildRoCrateMetadata } from "./plugins/ca-data-prep/process.js";
-import { OUTPUTS_OPTION_KEY as CSV_KEY } from "./plugins/ca-data-prep/index.js";
-import { OUTPUTS_OPTION_KEY as CHAT_KEY } from "./plugins/chat-export/index.js";
+} from "./_crate_outputs.js";
+import { buildRoCrateMetadata } from "../plugins/ca-data-prep/process.js";
+import { OUTPUTS_OPTION_KEY as CSV_KEY } from "../plugins/ca-data-prep/index.js";
+import { OUTPUTS_OPTION_KEY as CHAT_KEY } from "../plugins/chat-export/index.js";
 
 let failures = 0;
 const check = async (label, fn) => {
@@ -25,7 +25,7 @@ const refs = (v) => [].concat(v ?? []).map((x) => (x && typeof x === "object" ? 
 // The real core helper from the app workspace, so the plugins' merge path is
 // exercised properly. Only this test reaches into the app — the plugins
 // themselves still receive it through deps.
-const { mergeCrateInto } = await import("../app/src/crate.js");
+const { mergeCrateInto } = await import("../../app/src/crate.js");
 const deps = new Proxy({}, {
   get: (_t, key) => (key === "mergeCrateInto" ? mergeCrateInto : noop),
   has: () => true,
