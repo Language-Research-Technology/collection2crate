@@ -1,7 +1,7 @@
 {
   "name": "collection2crate-workspace",
   "private": true,
-  "description": "collection2crate and its plugins, as npm workspaces: packages/app is the browser app, packages/plugins the build plugins it bundles.",
+  "description": "collection2crate and its plugins, as npm workspaces: packages/app is the browser app, packages/app-plugins the build plugins it bundles.",
   "license": "Apache-2.0",
   "workspaces": [
     "packages/*"

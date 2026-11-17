@@ -1,0 +1,32 @@
+{
+  "name": "collection2crate-plugins",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Build plugins for collection2crate — hook-tap plugins, including the builders that assemble the crate; each lives in plugins/<name>/. The collection2crate-plugins workspace of the collection2crate repo.",
+  "license": "Apache-2.0",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./*": "./*"
+  },
+  "dependencies": {
+    "@huggingface/tokenizers": "0.2.0",
+    "cheerio": "^1.0.0",
+    "compromise": "14.17.0",
+    "exceljs": "^4.4.0",
+    "mammoth": "^1.12.0",
+    "onnxruntime-web": "1.30.0",
+    "ro-crate": "^3.7.2",
+    "ro-crate-excel": "^1.2.1",
+    "ro-crate-plots": "github:Language-Research-Technology/ro-crate-plots#68d55d0c6e3359173b02ff80e69476a428636c87",
+    "roctable": "github:ptsefton/roctable",
+    "unicode-name": "^1.1.0",
+    "unpdf": "1.8.1",
+    "vega-embed": "^7.3.0"
+  },
+  "scripts": {
+    "test": "node scripts/run-tests.mjs",
+    "update:pronom": "node plugins/file-format-identify/update-sf-wasm.mjs"
+  }
+}

@@ -7,7 +7,7 @@ This repo is an [npm workspaces](https://docs.npmjs.com/cli/v8/using-npm/workspa
 | Workspace | Folder | What it is |
 | --- | --- | --- |
 | `collection2crate` | [`packages/app`](packages/app) | The browser app and its plugin engine. Spec: [`SPEC.md`](packages/app/SPEC.md), [`SPEC-UI.md`](packages/app/SPEC-UI.md) |
-| `collection2crate-plugins` | [`packages/plugins`](packages/plugins) | The build plugins the app bundles. See [`README.md`](packages/plugins/README.md), [`SPEC-PLUGINS.md`](packages/plugins/SPEC-PLUGINS.md) |
+| `collection2crate-plugins` | [`packages/app-plugins`](packages/app-plugins) | The build plugins the app bundles. See [`README.md`](packages/app-plugins/README.md), [`SPEC-PLUGINS.md`](packages/app-plugins/SPEC-PLUGINS.md) |
 
 ## Getting started
 
@@ -32,7 +32,7 @@ PLUGINS=merge,validate-crate,ro-crate-json-output npm run build   # bundle only 
 
 Extra arguments reach Vite after `--`, e.g. `npm run dev -- --port 3000`.
 
-`npm install` links `node_modules/collection2crate-plugins` to `packages/plugins`, so an edit to a plugin shows up in the dev server straight away. Add a dependency to one package with `npm install <pkg> -w collection2crate` or `-w collection2crate-plugins`.
+`npm install` links `node_modules/collection2crate-plugins` to `packages/app-plugins`, so an edit to a plugin shows up in the dev server straight away. Add a dependency to one package with `npm install <pkg> -w collection2crate` or `-w collection2crate-plugins`.
 
 ## License
 
