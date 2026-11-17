@@ -17,11 +17,11 @@
 //                 person sees what they would parse before saving.
 //
 // Everything the person edits lives in one `state` object that outlives each
-// dialog, so Back loses nothing. The DOM is built with src/_panel.js and the
+// dialog, so Back loses nothing. The DOM is built with lib/_panel.js and the
 // host's own classes; the few rules specific to this editor are prefixed
 // `tg-` and injected once, the way roctable's tree editor does it.
 
-import { element, button, field, checkbox, dataTable } from "../../src/_panel.js";
+import { element, button, field, checkbox, dataTable } from "../../lib/_panel.js";
 import {
   REGIONS, IGNORE, SPEAKER_FIELDS, TURN_FIELDS, HEADER_FIELD_PATTERN,
   DEFAULT_GRAMMAR, IGNORE_FIELD, LAYOUT_PARTS, applyCleanup, applyLayout, grammarLayout, buildGrammar, buildRegions, exactPattern,
@@ -29,7 +29,7 @@ import {
   ignoreLinePattern, literalLinePattern, patternError, shapePattern, buildRowPattern, checkRegionOrder,
   parseWithGrammar, suggestRegions, suggestSamples, textToLines, looksFixedWidth, describeFixedColumn, fixedColumnError,
   turnFieldDefs, speakerFieldDefs, customFieldKey, customLabelError,
-} from "../../src/_transcript_grammar.js";
+} from "../../lib/_transcript_grammar.js";
 
 const MODAL_CLASS = "tg-modal";
 const RENDER_CAP = 300;

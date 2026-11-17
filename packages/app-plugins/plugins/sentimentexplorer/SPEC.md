@@ -156,8 +156,8 @@ category. Provide:
 - A parameter view recording the section names and their source mappings,
   and the selected categories, for reproducibility.
 
-Use the host vocabulary from `src/_panel.js` and the shared CSV helpers in
-`src/_csv.js`. Do not write analysis output into the selected crate output
+Use the host vocabulary from `lib/_panel.js` and the shared CSV helpers in
+`lib/_csv.js`. Do not write analysis output into the selected crate output
 directory — visualisation results are copied or downloaded, never filed as
 crate content (SPEC-PLUGINS.md).
 

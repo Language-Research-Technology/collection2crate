@@ -5,10 +5,10 @@
 // A visualisation panel, not a build plugin: it taps no hook, runs during no
 // build, and does nothing until someone types in it (SPEC-PLUGINS.md).
 
-import { buildCsvText, copyText, downloadCsv } from "../../src/_csv.js";
+import { buildCsvText, copyText, downloadCsv } from "../../lib/_csv.js";
 import {
   attributionFooter, button, checkbox, dataTable, element, field, note, select,
-} from "../../src/_panel.js";
+} from "../../lib/_panel.js";
 
 // Rendering every row of a corpus-wide match set locks the page up for no
 // benefit — nobody reads row 4000. Exports carry everything.

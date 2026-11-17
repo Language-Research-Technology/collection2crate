@@ -124,7 +124,7 @@ Host-side work this spec depends on, none of it done yet:
 
 ## Shared helpers
 
-`src/_csv.js` in this package, next to `_progress.js`: `csvField(value)` (quote
+`lib/_csv.js` in this package, next to `_progress.js`: `csvField(value)` (quote
 when the value holds a comma, quote or newline; double any quote),
 `buildCsvText(header, rows)`, and `downloadCsv(filename, text)`. Both plugins
 offer the same two result actions and must escape identically.

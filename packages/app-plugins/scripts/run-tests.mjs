@@ -2,7 +2,7 @@
 // Discovers and runs every *.test.mjs in this package (npm test).
 //
 // Each test sits next to what it tests: a plugin's own tests in its folder
-// under plugins/, a shared module's tests in src/, and the checks that hold
+// under plugins/, a shared module's tests in lib/, and the checks that hold
 // for every plugin in REGISTRY in tests/. Discovery rather than a list, so a
 // new test runs simply by existing — the same approach as packages/app's
 // scripts/run-tests.mjs.
@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const SEARCHED = ["plugins", "src", "tests"];
+const SEARCHED = ["plugins", "lib", "tests"];
 
 async function findTests(dir) {
   const found = [];

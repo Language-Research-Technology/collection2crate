@@ -1076,7 +1076,7 @@ Each plugin is one folder under that package's `plugins/`, named as the plugin
 names itself and as its `REGISTRY` keys it — which is what lets a `PLUGINS`
 entry resolve to `collection2crate-plugins/plugins/<name>/index.js` with no
 lookup table. What is shared between plugins rather than being one (the
-progress helper) sits outside `plugins/`, in that package's `src/`.
+progress helper) sits outside `plugins/`, in that package's `lib/`.
 
 That list — and each plugin's own internal file layout (`xlsx_crate.js`, `matcher.js`, `place_lookup.js`, `layout.js`, and so on) — is `collection2crate-plugins`' to document in its own README, not this spec's; this file only tracks what `PLUGINS` currently resolves to.
 

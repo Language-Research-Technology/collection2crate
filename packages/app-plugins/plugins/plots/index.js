@@ -1,5 +1,5 @@
 import embed from "vega-embed";
-import { button, element, note } from "../../src/_panel.js";
+import { button, element, note } from "../../lib/_panel.js";
 import { createDefaultConfig, embedOptions, generatePlotSpecs, layoutSpan, validatePlotsConfig } from "./model.js";
 import { openPlotsConfigEditor } from "./config/editor.js";
 import PACKAGE from "../../package.json" with { type: "json" };

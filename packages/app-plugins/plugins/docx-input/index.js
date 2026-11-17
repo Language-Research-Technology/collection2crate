@@ -1,4 +1,4 @@
-import { progressFor } from "../../src/_progress.js";
+import { progressFor } from "../../lib/_progress.js";
 
 // A builder for corpora of structured Word documents: parses Heading 1/2/3-
 // structured .docx files into Collections/DocumentParts/Chapters

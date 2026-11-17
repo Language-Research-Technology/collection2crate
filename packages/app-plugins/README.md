@@ -21,15 +21,15 @@ the package can still be tested on its own.
 ```
 index.js                 REGISTRY — the one registry, keyed by plugin name
 plugins/<name>/index.js  one folder per plugin; createPlugin(deps) lives here
-src/_progress.js         shared machinery, not a plugin
-src/_entity_ids.js       the @id an entity made from a name gets, shared by merge and name-lookup
-src/_place_lookup.js     GA and GHAP (TLCMap's search API) gazetteer lookup and the Geometry it writes, shared by merge and name-lookup
-src/_merge_config.js     which merge config a run uses (uploaded, folder, bundled), shared the same way
-src/_csv.js              CSV building and download, for visualisation panels
-src/_panel.js            the DOM vocabulary those panels share
-src/_transcript_grammar.js  transcript grammars: generation, parsing, saved-grammar I/O
+lib/_progress.js         shared machinery, not a plugin
+lib/_entity_ids.js       the @id an entity made from a name gets, shared by merge and name-lookup
+lib/_place_lookup.js     GA and GHAP (TLCMap's search API) gazetteer lookup and the Geometry it writes, shared by merge and name-lookup
+lib/_merge_config.js     which merge config a run uses (uploaded, folder, bundled), shared the same way
+lib/_csv.js              CSV building and download, for visualisation panels
+lib/_panel.js            the DOM vocabulary those panels share
+lib/_transcript_grammar.js  transcript grammars: generation, parsing, saved-grammar I/O
 plugins/<name>/*.test.mjs   a plugin's own tests, next to its code
-src/*.test.mjs           tests of the shared modules beside them
+lib/*.test.mjs           tests of the shared modules beside them
 tests/hooks.test.mjs     the hook/priority/progress contract, for every plugin in REGISTRY
 tests/panels.test.mjs    the panel contract, for every visualisation panel in REGISTRY
 scripts/run-tests.mjs    finds and runs every *.test.mjs (npm test)
@@ -40,7 +40,7 @@ itself and as `REGISTRY` keys it — that triple agreement is what lets a
 consumer resolve `collection2crate-plugins/plugins/<name>/index.js` from a
 `PLUGINS` selection without a lookup table, and `tests/hooks.test.mjs` asserts the
 registry key and `plugin.name` half of it. Anything shared between plugins
-rather than being one stays outside `plugins/`, in `src/`.
+rather than being one stays outside `plugins/`, in `lib/`.
 
 ## Two kinds of plugin
 
@@ -179,9 +179,9 @@ rather than accumulating stale media from renamed documents. The bytes live on
 `name-lookup` does all its work at `files:prepare`, during Process, on the
 crate the run was seeded with: named entity recognition (compromise) over each
 `.txt`/`.md`/`.docx`/`.pdf` file's text (PDFs through `unpdf`), other proper
-names checked against the GA and GHAP gazetteers (`src/_place_lookup.js`,
+names checked against the GA and GHAP gazetteers (`lib/_place_lookup.js`,
 shared with `merge`), and each name turned into the `@id` merge would give it
-(`src/_entity_ids.js`: `#john_smith`, `#place-mount-isa`) — reused if the crate already holds it and
+(`lib/_entity_ids.js`: `#john_smith`, `#place-mount-isa`) — reused if the crate already holds it and
 created as a `Person` or `Place` if not. With the gazetteer on, places get
 coordinates as a linked `Geometry`, written as merge writes them and looked
 up with the merge config's `placeMatchRegion`; a Place that already has a
@@ -300,7 +300,7 @@ drives bar state any more. The old convention — emitting
 parse the `done/total` out of the string — is gone. Keep logging what is
 worth reading in the transcript; report progress separately.
 
-Always go through `progressFor(ctx)` (`src/_progress.js`) rather than
+Always go through `progressFor(ctx)` (`lib/_progress.js`) rather than
 touching `ctx.progress` directly. It returns the same three-call shape on a
 host that has no `ctx.progress` at all, so a plugin from this package still
 runs under an older collection2crate instead of throwing partway through a build.
@@ -324,11 +324,11 @@ Run from the repo root (`npm test` there runs the app's suites and these),
 or from this folder without the `-w`.
 
 A test lives next to what it tests, and `scripts/run-tests.mjs` finds every
-`*.test.mjs` under `plugins/`, `src/` and `tests/`, so a new one runs without
+`*.test.mjs` under `plugins/`, `lib/` and `tests/`, so a new one runs without
 being listed anywhere:
 
 - `plugins/<name>/<topic>.test.mjs` for a plugin's own behaviour;
-- `src/<topic>.test.mjs` for a shared module in `src/`;
+- `lib/<topic>.test.mjs` for a shared module in `lib/`;
 - `tests/` for checks that hold for every plugin in `REGISTRY`.
 
 Each file is a plain Node script using `node:assert`, run from the package
@@ -490,8 +490,8 @@ markers, section names, line-skip patterns (`ignore`) and removal patterns (`str
 kept — delimiters, brackets, which fields are optional — never its text,
 since the rows marked up are real speaker declarations. `parseWithGrammar(text,
 grammar)` is pure; it and the folder helpers live in
-`src/_transcript_grammar.js`, since three plugins use them.
-`src/transcript-grammar.test.mjs` covers generation and parsing.
+`lib/_transcript_grammar.js`, since three plugins use them.
+`lib/transcript-grammar.test.mjs` covers generation and parsing.
 
 **Parsing with a saved grammar.** `ca-data-prep`'s `transcriptGrammar` option
 (a child of "Process plain transcript documents", listing the grammars saved
@@ -635,7 +635,7 @@ Rules of thumb:
 ### Generated files in the crate
 
 A plugin that writes files it also describes in the crate should let the
-person building it leave those files out. `src/_crate_outputs.js` has the
+person building it leave those files out. `lib/_crate_outputs.js` has the
 shared pieces:
 
 - `outputsInCrateOption(key, what)` returns a checkbox child option,

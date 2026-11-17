@@ -13,7 +13,7 @@
 import assert from "node:assert/strict";
 import { ROCrate } from "ro-crate";
 import { REGISTRY } from "../index.js";
-import { progressFor, countedProgress } from "../src/_progress.js";
+import { progressFor, countedProgress } from "../lib/_progress.js";
 
 // collection2crate's src/plugins/hooks.js owns this list; it is duplicated rather
 // than imported on purpose — this package has no runtime dependency on

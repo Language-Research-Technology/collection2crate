@@ -8,7 +8,7 @@
 // injected via createPlugin(deps) rather than imported by relative path —
 // that's what keeps this package free of any runtime dependency back on
 // collection2crate.
-import { progressFor } from "../../src/_progress.js";
+import { progressFor } from "../../lib/_progress.js";
 
 let crateToJsonString, writeFile, fileExists;
 
