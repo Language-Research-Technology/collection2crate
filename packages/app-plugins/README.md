@@ -4,7 +4,7 @@ Build plugins for collection2crate — kept as their own package, separate
 from the app's `src/plugins/`, so a deployment can pick which plugins it
 bundles instead of shipping all of them.
 
-This is the `collection2crate-plugins` workspace (`packages/plugins/`) of
+This is the `collection2crate-plugins` workspace (`packages/app-plugins/`) of
 the [collection2crate](https://github.com/Language-Research-Technology/collection2crate)
 repo; the app is the `collection2crate` workspace beside it (`packages/app/`).
 It used to be a repo of its own, and its history came with it.
