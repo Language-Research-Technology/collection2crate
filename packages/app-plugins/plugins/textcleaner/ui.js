@@ -9,7 +9,7 @@ import {
   field,
   checkbox,
   attributionFooter,
-} from "../../src/_panel.js";
+} from "../../lib/_panel.js";
 import {
   cleanText,
   calculateStats,

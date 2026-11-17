@@ -7,7 +7,7 @@
 // direct import, so masp.js stays dynamically imported from collection2crate's
 // own tree and this package never statically references it. See this
 // repo's README for the createPlugin(deps) contract.
-import { progressFor } from "../../src/_progress.js";
+import { progressFor } from "../../lib/_progress.js";
 
 let loadMasp;
 

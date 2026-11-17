@@ -1,5 +1,5 @@
 // The "include in the RO-Crate" checkbox for the files ca-data-prep
-// and chat-export generate (src/_crate_outputs.js). Real ro-crate; the plugins'
+// and chat-export generate (lib/_crate_outputs.js). Real ro-crate; the plugins'
 // crate:build handlers are driven with a hand-built ctx.
 //
 //   npm test -w collection2crate-plugins -- crate-outputs.test.mjs

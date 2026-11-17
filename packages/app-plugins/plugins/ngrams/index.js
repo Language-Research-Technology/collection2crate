@@ -4,8 +4,8 @@
 //
 // A visualisation panel, not a build plugin (SPEC-PLUGINS.md).
 
-import { buildCsvText, copyText, downloadCsv } from "../../src/_csv.js";
-import { button, checkbox, dataTable, element, field, numberInput } from "../../src/_panel.js";
+import { buildCsvText, copyText, downloadCsv } from "../../lib/_csv.js";
+import { button, checkbox, dataTable, element, field, numberInput } from "../../lib/_panel.js";
 
 const MAX_RENDERED_ROWS = 2000;
 

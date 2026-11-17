@@ -7,7 +7,7 @@
 // No chart library: axes, ticks and one mark per row, drawn by hand, themed
 // through the app's CSS custom properties so it follows light and dark.
 
-import { element, note, select } from "../../src/_panel.js";
+import { element, note, select } from "../../lib/_panel.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const WIDTH = 720;

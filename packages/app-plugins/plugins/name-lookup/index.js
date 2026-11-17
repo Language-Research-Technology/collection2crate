@@ -11,8 +11,8 @@
 //
 // Hook names are literal strings and core collection2crate functions arrive
 // via createPlugin(deps) — see this package's README.
-import { progressFor } from "../../src/_progress.js";
-import { generatedEntityId } from "../../src/_entity_ids.js";
+import { progressFor } from "../../lib/_progress.js";
+import { generatedEntityId } from "../../lib/_entity_ids.js";
 
 let readFileBytes, readJsonFromFolder, writeFileAtPath;
 
@@ -46,7 +46,7 @@ function link(crate, fileId, property, id) {
 
 /**
  * Link each file to the people and places found in it, reusing any entity
- * the crate already has under a name's @id (merge's scheme, src/_entity_ids.js) and creating a Person or Place for
+ * the crate already has under a name's @id (merge's scheme, lib/_entity_ids.js) and creating a Person or Place for
  * the rest. A File the crate doesn't hold yet is added, named from `fileNames`.
  *
  * @param {ROCrate} crate
@@ -97,7 +97,7 @@ export function linkNamedEntities(crate, namesByFile, fileNames = {}) {
  * @returns {Promise<Map<string, { exact: boolean, matchedName: string }>>}
  */
 export async function confirmPlaces(candidates, lookup) {
-  const { normalizePlaceName, placeNameVariants } = await import("../../src/_place_lookup.js");
+  const { normalizePlaceName, placeNameVariants } = await import("../../lib/_place_lookup.js");
   const confirmed = new Map();
   for (const name of candidates) {
     const match = await lookup(name);
@@ -121,7 +121,7 @@ const hasGeometry = (place) => [].concat(place?.geo ?? []).some((ref) => ref && 
  * @returns {Promise<{ placed: number, kept: number }>}
  */
 export async function addPlaceCoordinates(crate, coordinatesByName) {
-  const { setPlaceGeometry } = await import("../../src/_place_lookup.js");
+  const { setPlaceGeometry } = await import("../../lib/_place_lookup.js");
   const counts = { placed: 0, kept: 0 };
   const done = new Set(); // "Cairns" and "CAIRNS" are one Place
   for (const [name, match] of coordinatesByName) {
@@ -259,8 +259,8 @@ const plugin = {
 
           let coordinates = new Map();
           if (gazetteer) {
-            const { createPlaceLookupService, placeLookupSettings, normalizePlaceName } = await import("../../src/_place_lookup.js");
-            const { resolveMergeConfig } = await import("../../src/_merge_config.js");
+            const { createPlaceLookupService, placeLookupSettings, normalizePlaceName } = await import("../../lib/_place_lookup.js");
+            const { resolveMergeConfig } = await import("../../lib/_merge_config.js");
             const { config, source } = await resolveMergeConfig(ctx.options, ctx.dirHandle, readJsonFromFolder);
             const settings = placeLookupSettings(config);
             if (settings.placeMatchRegion) ctx.log(`Name lookup: preferring places in ${settings.placeMatchRegion} (merge config: ${source}).`, "muted");

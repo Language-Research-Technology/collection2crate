@@ -10,7 +10,7 @@ import {
   processTranscriptText, paragraphNumbersByLine, plainTextAsParagraphs, decodePlainText,
   extractTranscriptText, selectTranscriptFiles, transcriptBaseName, transcriptMediaType,
 } from "./process.js";
-import { documentLines, textToLines } from "../../src/_transcript_grammar.js";
+import { documentLines, textToLines } from "../../lib/_transcript_grammar.js";
 
 let failures = 0;
 const check = async (label, fn) => {

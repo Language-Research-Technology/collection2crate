@@ -5,11 +5,11 @@
 // not redistributed with this repository because its data terms differ from
 // the software licence.
 
-import { buildCsvText, copyText, downloadCsv } from "../../src/_csv.js";
+import { buildCsvText, copyText, downloadCsv } from "../../lib/_csv.js";
 import {
   attributionFooter, button, checkbox, dataTable, element, field, flashLabel,
   note, resultsBar,
-} from "../../src/_panel.js";
+} from "../../lib/_panel.js";
 
 const TOKEN = /[\p{L}\p{M}\p{N}]+(?:['’\-][\p{L}\p{M}\p{N}]+)*/gu;
 const MAX_RENDERED_ROWS = 2000;

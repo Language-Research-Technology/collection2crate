@@ -18,11 +18,11 @@
 // structure only; the sample text it was marked up from is never written.
 //
 // The grammar itself — generation, parsing, and reading saved grammars from
-// the folder — is src/_transcript_grammar.js, shared with ca-data-prep and
+// the folder — is lib/_transcript_grammar.js, shared with ca-data-prep and
 // chat-export, which parse with a saved grammar when one is chosen.
 import {
   GRAMMAR_CONFIG_DIR, GRAMMAR_VERSION, grammarPath, listSavedGrammars, loadSavedGrammar, textToLines,
-} from "../../src/_transcript_grammar.js";
+} from "../../lib/_transcript_grammar.js";
 import { openGrammarEditor, openGrammarTester } from "./ui.js";
 
 export const CONFIG_DIR = GRAMMAR_CONFIG_DIR;

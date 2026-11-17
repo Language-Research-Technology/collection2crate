@@ -11,11 +11,11 @@ import {
 
 // Hook names are literal strings and writeFileAtPath (fs_helpers.js) arrives
 // via createPlugin(deps) — see this package's README.
-import { countedProgress } from "../../src/_progress.js";
-import { outputsInCrateOption, includeOutputs, removeOutputEntities } from "../../src/_crate_outputs.js";
+import { countedProgress } from "../../lib/_progress.js";
+import { outputsInCrateOption, includeOutputs, removeOutputEntities } from "../../lib/_crate_outputs.js";
 import {
   GRAMMAR_CONFIG_DIR, grammarPath, grammarFingerprint, listSavedGrammars, loadSavedGrammar,
-} from "../../src/_transcript_grammar.js";
+} from "../../lib/_transcript_grammar.js";
 
 let writeFileAtPath, fileExists, readFileTextFromDirectory, mergeCrateInto;
 

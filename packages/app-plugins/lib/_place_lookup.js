@@ -589,7 +589,7 @@ export function createPlaceLookupService(options = {}, log = () => {}) {
     // spelling of every name at once; that settles any name GA knows exactly,
     // and any name it doesn't when nothing else would be asked. The rest are
     // looked up one at a time, `PREFETCH_CONCURRENCY` at once. `report(fraction,
-    // label)` is the progress channel (see src/_progress.js); it is
+    // label)` is the progress channel (see lib/_progress.js); it is
     // deliberately not `log`, which is the transcript.
     async prefetch(placeNames, report = () => {}) {
       if (!enabled) return;

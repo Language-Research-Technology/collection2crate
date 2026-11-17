@@ -864,7 +864,7 @@ export function formatBodyReport(diagnostics, expected = BODY_EXPECTED) {
 /**
  * Rows, speakers and a conformance report for one transcript's text.
  *
- * `config.grammar` — a saved grammar (src/_transcript_grammar.js) — replaces
+ * `config.grammar` — a saved grammar (lib/_transcript_grammar.js) — replaces
  * the built-in convention below with that grammar's line shapes;
  * `config.grammarName` names it in the report. Either way the result has the
  * same shape.
