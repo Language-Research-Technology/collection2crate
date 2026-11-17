@@ -28,7 +28,7 @@
 // browserFileReader below wraps collection2crate's readFileTextFromDirectory,
 // which already returns null for "not found", matching what extractTables'
 // loadText expects from a reader.
-import { progressFor, countedProgress } from "../../src/_progress.js";
+import { progressFor, countedProgress } from "../../lib/_progress.js";
 import { extractTables } from "roctable/lib/extract.js";
 import { tablesToCsvStrings } from "roctable/lib/csv.js";
 import { discoverConfig } from "./discover.js";

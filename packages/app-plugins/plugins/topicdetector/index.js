@@ -3,11 +3,11 @@
 // vocabulary trimming, both Gibbs samplers) is kept separate from the panel
 // so it is testable without a DOM. See SPEC.md for the full contract.
 
-import { buildCsvText, copyText, downloadCsv } from "../../src/_csv.js";
+import { buildCsvText, copyText, downloadCsv } from "../../lib/_csv.js";
 import {
   attributionFooter, button, dataTable, element, field, flashLabel,
   note, resultsBar,
-} from "../../src/_panel.js";
+} from "../../lib/_panel.js";
 
 const TOKEN = /[\p{L}\p{M}\p{N}]+(?:['’\-][\p{L}\p{M}\p{N}]+)*/gu;
 const HAS_LETTER = /\p{L}/u;

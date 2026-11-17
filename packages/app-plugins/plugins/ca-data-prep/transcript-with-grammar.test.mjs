@@ -1,11 +1,11 @@
 // ca-data-prep and chat-export parsing with a saved transcript grammar
-// (src/_transcript_grammar.js) instead of the built-in convention.
+// (lib/_transcript_grammar.js) instead of the built-in convention.
 //
 // Placeholder names only — see "Names in fixtures" in the project notes.
 //
 //   npm test -w collection2crate-plugins -- transcript-with-grammar.test.mjs
 import assert from "node:assert/strict";
-import { buildGrammar, documentLines, grammarFingerprint, grammarPath, listSavedGrammars } from "../../src/_transcript_grammar.js";
+import { buildGrammar, documentLines, grammarFingerprint, grammarPath, listSavedGrammars } from "../../lib/_transcript_grammar.js";
 import { processTranscriptText, buildSpeakerPersonEntities, toCsv } from "./process.js";
 import { resolveTranscriptGrammar, warnIfGrammarChanged } from "./index.js";
 import { generateChatText } from "../chat-export/index.js";

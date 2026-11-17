@@ -3,8 +3,8 @@
 // primitive; this file owns the "when/how to gather options for it" logic
 // that used to live inline in processFolder.
 import { mergeXlsxIntoCrate } from "./xlsx.js";
-import { progressFor } from "../../src/_progress.js";
-import { resolveMergeConfig } from "../../src/_merge_config.js";
+import { progressFor } from "../../lib/_progress.js";
+import { resolveMergeConfig } from "../../lib/_merge_config.js";
 
 // Hook names are literal strings and core collection2crate functions arrive
 // via createPlugin(deps) — see this package's README. graphEntityById (needed

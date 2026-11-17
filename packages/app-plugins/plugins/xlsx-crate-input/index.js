@@ -8,7 +8,7 @@
 // entities the workbook's isPartOf/image references point at. This plugin
 // supplies metadata; it does not assemble the crate.
 import { FOLDER_XLSX_NAME } from "./xlsx_crate.js";
-import { progressFor } from "../../src/_progress.js";
+import { progressFor } from "../../lib/_progress.js";
 
 // Hook names are literal strings, and core collection2crate functions arrive
 // via createPlugin(deps) — including loadMasp, a thunk

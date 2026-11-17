@@ -138,7 +138,7 @@ and number of result rows. Provide:
   optional for the first implementation only if the result table remains fully
   usable; the intended feature is parity with the R app and includes the chart.
 
-Use the host vocabulary from `src/_panel.js` and existing shared CSV helpers.
+Use the host vocabulary from `lib/_panel.js` and existing shared CSV helpers.
 Do not write analysis output into the selected crate output directory.
 
 ## Exports
@@ -154,7 +154,7 @@ Provide actions for:
   documented follow-up rather than producing a misleading file.
 
 The CSV must include all 16 result columns, not only the rendered rows. Escape
-fields through `src/_csv.js`.
+fields through `lib/_csv.js`.
 
 ## Testable seam
 

@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { ROCrate } from "ro-crate";
 import { REGISTRY } from "../../index.js";
 import { linkNamedEntities, confirmPlaces, addPlaceCoordinates, CACHE_PATH } from "./index.js";
-import { generatedEntityId } from "../../src/_entity_ids.js";
+import { generatedEntityId } from "../../lib/_entity_ids.js";
 import { extractNames, fileText, isReadableForNames, parseNameList, createNameMatcher } from "./extract.js";
 
 let failures = 0;
@@ -240,7 +240,7 @@ await check("coordinates follow merge's region preference, from the folder's mer
 });
 
 await check("ties go to the region first, then to a populated place", async () => {
-  const { createPlaceLookupService } = await import("../../src/_place_lookup.js");
+  const { createPlaceLookupService } = await import("../../lib/_place_lookup.js");
   const county = { name: "Cairns", latitude: -22.6, longitude: 148.2, authority: "QLD", category: "ADMINISTRATIVE AREA", feature: "COUNTY" };
   const nswTown = { name: "Cairns", latitude: -30.0, longitude: 150.0, authority: "NSW", category: "POPULATED PLACE", feature: "LOCALITY" };
   const realFetch = globalThis.fetch;

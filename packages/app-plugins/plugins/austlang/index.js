@@ -6,7 +6,7 @@
 // statically imported into the registry.
 // Hook names are literal strings and core collection2crate functions arrive
 // via createPlugin(deps) — see this package's README.
-import { progressFor } from "../../src/_progress.js";
+import { progressFor } from "../../lib/_progress.js";
 
 let addLanguageEntities;
 

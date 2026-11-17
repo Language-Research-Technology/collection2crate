@@ -1,11 +1,11 @@
 // Collocation analysis: association measures for words in a node window.
 // The engine is kept separate from the panel so its statistics can be tested.
 
-import { buildCsvText, copyText, downloadCsv } from "../../src/_csv.js";
+import { buildCsvText, copyText, downloadCsv } from "../../lib/_csv.js";
 import {
   attributionFooter, button, checkbox, dataTable, element, field, flashLabel, numberInput,
   note, resultsBar, select,
-} from "../../src/_panel.js";
+} from "../../lib/_panel.js";
 
 const TOKEN = /[\p{L}\p{M}\p{N}]+(?:['’\-][\p{L}\p{M}\p{N}]+)*/gu;
 const RESULT_COLUMNS = [

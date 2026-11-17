@@ -12,7 +12,7 @@
 // them once into these module-level bindings before the plugin object is
 // ever used — see this package's README for the createPlugin(deps) contract.
 import { resolveProfileGroups } from "./layout.js";
-import { countedProgress, progressFor } from "../../src/_progress.js";
+import { countedProgress, progressFor } from "../../lib/_progress.js";
 
 let crateToPreviewHtml, crateToMultiPageHtml;
 let writeFile, writeFileAtPath, readJsonFromFolder, readFileTextFromDirectory, verifyPermission, fileExists, getFileHandleAtPath;

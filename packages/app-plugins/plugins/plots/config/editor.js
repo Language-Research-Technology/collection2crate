@@ -1,4 +1,4 @@
-import { button, checkbox, element, field, select } from "../../../src/_panel.js";
+import { button, checkbox, element, field, select } from "../../../lib/_panel.js";
 import { BUILDER_NAMES, validatePlotsConfig } from "../model.js";
 
 const clone = (value) => JSON.parse(JSON.stringify(value));

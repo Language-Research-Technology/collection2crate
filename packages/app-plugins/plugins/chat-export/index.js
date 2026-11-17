@@ -1,6 +1,6 @@
 import { extractTranscriptText, processTranscriptText, selectTranscriptFiles, transcriptBaseName } from "../ca-data-prep/process.js";
-import { countedProgress } from "../../src/_progress.js";
-import { outputsInCrateOption, includeOutputs, removeOutputEntities, replaceDotSlashIds } from "../../src/_crate_outputs.js";
+import { countedProgress } from "../../lib/_progress.js";
+import { outputsInCrateOption, includeOutputs, removeOutputEntities, replaceDotSlashIds } from "../../lib/_crate_outputs.js";
 
 // Generated files go under _outputs/, named for what they are rather than for
 // this plugin, the same as ca-data-prep's csv/ and logs/. The directory is
