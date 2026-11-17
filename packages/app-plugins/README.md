@@ -27,6 +27,8 @@ lib/_place_lookup.js     GA and GHAP (TLCMap's search API) gazetteer lookup and 
 lib/_merge_config.js     which merge config a run uses (uploaded, folder, bundled), shared the same way
 lib/_csv.js              CSV building and download, for visualisation panels
 lib/_panel.js            the DOM vocabulary those panels share
+lib/_tokenize.js         the word tokens the text-analysis panels count
+lib/_documents.js        which documents a panel analyses for the sources and columns picked
 lib/_transcript_grammar.js  transcript grammars: generation, parsing, saved-grammar I/O
 plugins/<name>/*.test.mjs   a plugin's own tests, next to its code
 lib/*.test.mjs           tests of the shared modules beside them

@@ -8,8 +8,9 @@ import {
   attributionFooter, button, dataTable, element, field, flashLabel,
   note, resultsBar,
 } from "../../lib/_panel.js";
+import { documentsForSelection as selectDocuments } from "../../lib/_documents.js";
+import { tokenize as tokenizeWords } from "../../lib/_tokenize.js";
 
-const TOKEN = /[\p{L}\p{M}\p{N}]+(?:['’\-][\p{L}\p{M}\p{N}]+)*/gu;
 const HAS_LETTER = /\p{L}/u;
 const MAX_RENDERED_ROWS = 2000;
 const DEFAULT_ITERATIONS = 200;
@@ -146,68 +147,43 @@ const STOPWORD_LANGUAGE_LABELS = {
   es: "Spanish", it: "Italian", nl: "Dutch", pt: "Portuguese", ru: "Russian", ar: "Arabic",
 };
 
-// Unicode-aware words, lowercased, then drop single characters and anything
-// with no letter at all (matching the R app's remove_numbers/remove_symbols
-// pass) — not `[A-Za-z0-9]`, which would silently drop non-English letters.
+// Words as lib/_tokenize.js splits them, lowercased, then drop single
+// characters and anything with no letter at all (matching the R app's
+// remove_numbers/remove_symbols pass).
 export function tokenize(text) {
-  const tokens = String(text || "").match(TOKEN) || [];
-  return tokens.map((token) => token.toLocaleLowerCase())
-    .filter((token) => token.length > 1 && HAS_LETTER.test(token));
+  return tokenizeWords(text).filter((token) => token.length > 1 && HAS_LETTER.test(token));
 }
 
-/** Build the analysis documents for one or more selected sources. Plain-text
- * files are one document each; table rows are individual documents.
- * `sources` may be a single source string, an array, or omitted/`null` for
- * every loaded file; an explicit empty array means nothing selected.
- * `columns` picks which columns of a table source supply its text — an
- * array shared across every selected table, or a `Map<source, string[]>`
- * for a different column per file (mirrors sentimentexplorer's function of
- * the same name).
+// A plain-text file is one document: the text of all its paragraphs.
+function wholeFileDocuments(documents, source) {
+  const bySource = new Map();
+  for (const document of documents) {
+    if (!document.source) continue;
+    if (!bySource.has(document.source)) bySource.set(document.source, []);
+    bySource.get(document.source).push(document.text || "");
+  }
+  const files = [...bySource].map(([name, texts]) => ({ source: name, text: texts.join(" ").trim() }))
+    .filter((doc) => doc.text);
+  return source == null ? files : files.filter((doc) => doc.source === source);
+}
+
+const labelledRowDocument = (source, index, text) => ({
+  id: `${source}#row-${index + 1}`,
+  source,
+  label: `${source} · row ${index + 1}`,
+  text: text.trim(),
+});
+
+/**
+ * Build the analysis documents for the selected sources, as
+ * lib/_documents.js selects them: plain-text files are one document each,
+ * table rows are individual documents with a label for the results.
  */
 export function documentsForSelection(documents, tables, sources, columns = []) {
-  const everyFileDocument = () => {
-    const bySource = new Map();
-    const order = [];
-    for (const document of documents || []) {
-      if (!document.source) continue;
-      if (!bySource.has(document.source)) { bySource.set(document.source, []); order.push(document.source); }
-      bySource.get(document.source).push(document.text || "");
-    }
-    return order.map((source) => ({ source, text: bySource.get(source).join(" ").trim() })).filter((doc) => doc.text);
-  };
-
-  if (sources == null) return everyFileDocument();
-  const list = Array.isArray(sources) ? sources : [sources];
-  if (list.includes("__all__")) return everyFileDocument();
-  if (!list.length) return [];
-
-  const bySource = new Map(everyFileDocument().map((doc) => [doc.source, doc.text]));
-  const result = [];
-  for (const source of list) {
-    const table = (tables || []).find((candidate) => candidate.source === source);
-    if (!table) {
-      const text = bySource.get(source);
-      if (text) result.push({ source, text });
-      continue;
-    }
-    const chosen = columns instanceof Map ? columns.get(source) : columns;
-    const useColumns = chosen && chosen.length ? new Set(chosen) : new Set(table.header);
-    table.rows.forEach((cells, index) => {
-      const text = table.header
-        .map((column, columnIndex) => useColumns.has(column) ? cells[columnIndex] || "" : "")
-        .filter(Boolean)
-        .join(" ")
-        .trim();
-      if (!text) return;
-      result.push({
-        id: `${source}#row-${index + 1}`,
-        source,
-        label: `${source} · row ${index + 1}`,
-        text,
-      });
-    });
-  }
-  return result;
+  return selectDocuments(documents, tables, sources, columns, {
+    fileDocuments: wholeFileDocuments,
+    rowDocument: labelledRowDocument,
+  });
 }
 
 /**
