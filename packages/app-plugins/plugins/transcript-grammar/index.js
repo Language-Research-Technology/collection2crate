@@ -37,12 +37,13 @@ export function createPlugin(deps) {
 const listGrammars = listSavedGrammars;
 const loadGrammar = (dirHandle, name) => loadSavedGrammar(dirHandle, name, readFileTextFromDirectory);
 
-// A .docx goes through ca-data-prep's own mammoth extraction, so the lines
-// marked up here are exactly the lines that plugin reads. Imported on demand:
+// A .docx goes through the same mammoth extraction ca-data-prep reads with
+// (lib/_document_text.js), so the lines marked up here are exactly the lines
+// that plugin reads. Imported on demand:
 // mammoth is heavy and most visits to the Build panel never open the editor.
 export async function readDocument(file) {
   if (/\.docx$/i.test(file.name || "")) {
-    const { extractDocumentText } = await import("../ca-data-prep/process.js");
+    const { extractDocumentText } = await import("../../lib/_document_text.js");
     const text = await extractDocumentText(await file.arrayBuffer());
     return textToLines(text, { paragraphs: true });
   }

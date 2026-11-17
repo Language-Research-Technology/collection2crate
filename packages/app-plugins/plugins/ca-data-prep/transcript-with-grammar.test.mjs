@@ -6,8 +6,10 @@
 //   npm test -w collection2crate-plugins -- transcript-with-grammar.test.mjs
 import assert from "node:assert/strict";
 import { buildGrammar, documentLines, grammarFingerprint, grammarPath, listSavedGrammars } from "../../lib/_transcript_grammar.js";
-import { processTranscriptText, buildSpeakerPersonEntities, toCsv } from "./process.js";
-import { resolveTranscriptGrammar, warnIfGrammarChanged } from "./index.js";
+import { processTranscriptText } from "../../lib/_transcript.js";
+import { buildSpeakerPersonEntities, toCsv } from "./outputs.js";
+import { resolveTranscriptGrammar } from "../../lib/_transcript_grammar.js";
+import { warnIfGrammarChanged } from "./index.js";
 import { generateChatText } from "../chat-export/index.js";
 
 let failures = 0;

@@ -1,4 +1,5 @@
-import { extractTranscriptText, processTranscriptText, selectTranscriptFiles, transcriptBaseName } from "../ca-data-prep/process.js";
+import { extractTranscriptText, processTranscriptText, selectTranscriptFiles, transcriptBaseName } from "../../lib/_transcript.js";
+import { resolveTranscriptGrammar } from "../../lib/_transcript_grammar.js";
 import { countedProgress } from "../../lib/_progress.js";
 import { outputsInCrateOption, includeOutputs, removeOutputEntities, replaceDotSlashIds } from "../../lib/_crate_outputs.js";
 
@@ -10,10 +11,10 @@ import { outputsInCrateOption, includeOutputs, removeOutputEntities, replaceDotS
 const OUTPUT_DIR = "_outputs/chat";
 export const OUTPUTS_OPTION_KEY = "chatOutputsInCrate";
 
-let writeFileAtPath, fileExists, readFileTextFromDirectory;
+let writeFileAtPath, fileExists, readFileTextFromDirectory, readFileBytes;
 
 export function createPlugin(deps) {
-  ({ writeFileAtPath, fileExists, readFileTextFromDirectory } = deps);
+  ({ writeFileAtPath, fileExists, readFileTextFromDirectory, readFileBytes } = deps);
   return plugin;
 }
 
@@ -126,7 +127,6 @@ const plugin = {
         const files = selectTranscriptFiles(ctx.filesWithMeta || ctx.files || [], warn);
         if (!files.length) return;
 
-        const { resolveTranscriptGrammar } = await import("../ca-data-prep/index.js");
         const chosen = await resolveTranscriptGrammar(ctx, readFileTextFromDirectory);
 
         const documentRecords = [];
@@ -136,8 +136,7 @@ const plugin = {
           const filePath = file.relativePath || file.fileName || file.name || "";
           let buffer = file.arrayBuffer ? await file.arrayBuffer() : null;
           if (!buffer && ctx.dirHandle && filePath) {
-            const { readDocxFileBytesFromDirHandle } = await import("../ca-data-prep/index.js");
-            buffer = await readDocxFileBytesFromDirHandle(ctx.dirHandle, filePath);
+            buffer = await readFileBytes(ctx.dirHandle, filePath);
           }
           if (!buffer) { tick(index); continue; }
 
