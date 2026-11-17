@@ -7,7 +7,8 @@
 //
 //   npm test -w collection2crate-plugins -- sentimentexplorer.test.mjs
 import assert from "node:assert/strict";
-import { analyzeSentiment, annotateSection, buildSummary, parseNrcLexiconCsv, documentsForSelection as documentsForSentimentSelection } from "./index.js";
+import { analyzeSentiment, annotateSection, buildSummary, parseNrcLexiconCsv } from "./index.js";
+import { documentsForSelection as documentsForSentimentSelection } from "../../lib/_documents.js";
 
 let failures = 0;
 const asyncChecks = [];

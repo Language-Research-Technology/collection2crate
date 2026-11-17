@@ -6,6 +6,7 @@
 
 import { buildCsvText, copyText, downloadCsv } from "../../lib/_csv.js";
 import { button, checkbox, dataTable, element, field, numberInput } from "../../lib/_panel.js";
+import { tokenize } from "../../lib/_tokenize.js";
 
 const MAX_RENDERED_ROWS = 2000;
 
@@ -13,7 +14,6 @@ const MAX_RENDERED_ROWS = 2000;
 // "don't", "Yolŋu-matha", "naïve". Deliberately not [A-Za-z0-9], which drops
 // every non-ASCII letter and would quietly mangle most of the orthographies
 // this tool exists to serve.
-const TOKEN = /[\p{L}\p{M}\p{N}]+(?:['’-][\p{L}\p{M}\p{N}]+)*/gu;
 
 // English function words, enough to take "the of a" off the top of a frequency
 // list. English and nothing else — which is why the panel's checkbox is off by
@@ -33,11 +33,6 @@ const ENGLISH_STOPWORDS = new Set([
   "who", "whom",
 ]);
 
-export function tokenize(text, caseSensitive = false) {
-  const tokens = String(text || "").match(TOKEN) || [];
-  return caseSensitive ? tokens : tokens.map((token) => token.toLowerCase());
-}
-
 const hasStopword = (ngram) => ngram.split(" ").some((word) => ENGLISH_STOPWORDS.has(word.toLowerCase()));
 
 // Counts every n-gram, and — whatever n is — every unigram and the token
@@ -49,7 +44,7 @@ function countNgrams(documents, { n, caseSensitive }) {
   const unigrams = new Map();
   let total = 0;
   for (const doc of documents || []) {
-    const tokens = tokenize(doc.text, caseSensitive);
+    const tokens = tokenize(doc.text, { lowercase: !caseSensitive });
     for (const token of tokens) {
       unigrams.set(token, (unigrams.get(token) || 0) + 1);
       total++;

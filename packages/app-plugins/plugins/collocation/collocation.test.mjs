@@ -7,7 +7,9 @@
 //
 //   npm test -w collection2crate-plugins -- collocation.test.mjs
 import assert from "node:assert/strict";
-import { analyzeCollocations, documentsForSelection, fisherExact, tokenize as tokenizeCollocations } from "./index.js";
+import { analyzeCollocations, fisherExact } from "./index.js";
+import { documentsForSelection } from "../../lib/_documents.js";
+import { tokenize as tokenizeCollocations } from "../../lib/_tokenize.js";
 
 let failures = 0;
 const asyncChecks = [];

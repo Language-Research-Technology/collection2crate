@@ -7,7 +7,8 @@
 //
 //   npm test -w collection2crate-plugins -- concordance.test.mjs
 import assert from "node:assert/strict";
-import { documentsForSelection as documentsForConcordanceSelection, search, searchAsync } from "./index.js";
+import { search, searchAsync } from "./index.js";
+import { documentsForSelection as documentsForConcordanceSelection } from "../../lib/_documents.js";
 
 let failures = 0;
 const asyncChecks = [];

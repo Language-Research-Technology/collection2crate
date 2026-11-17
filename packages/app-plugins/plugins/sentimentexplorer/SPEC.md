@@ -79,12 +79,13 @@ The panel should provide:
    Hide the whole column area when no selected file is tabular. Selecting a
    table source (with or without a column change) collapses that file's rows
    into documents that all share one `source` — the file name — so by
-   default they form a single section. This plugin's own
-   `documentsForSelection(documents, tables, sources, columns)` accepts a
-   single source or an array of sources for `sources`, and for `columns`
-   accepts either an array (the same column names applied to every selected
-   table, matching `collocation`'s function of the same name for a single
-   source) or a `Map<source, string[]>` for per-file column selection.
+   default they form a single section. The shared
+   `documentsForSelection(documents, tables, sources, columns)` in
+   `lib/_documents.js` accepts a single source or an array of sources for
+   `sources`, and for `columns` accepts either an array (the same column
+   names applied to every selected table, as `collocation` uses it for a
+   single source) or a `Map<source, string[]>` for per-file column
+   selection.
 3. **Section assignment.** Every distinct source in the *current* working
    document set (i.e. after the file/column selection above is applied)
    starts as its own section, named after that source. Show one text input

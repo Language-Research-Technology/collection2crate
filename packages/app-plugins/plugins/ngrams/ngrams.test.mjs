@@ -7,7 +7,8 @@
 //
 //   npm test -w collection2crate-plugins -- ngrams.test.mjs
 import assert from "node:assert/strict";
-import { analyzeNgrams, tokenize } from "./index.js";
+import { analyzeNgrams } from "./index.js";
+import { tokenize } from "../../lib/_tokenize.js";
 
 let failures = 0;
 const asyncChecks = [];

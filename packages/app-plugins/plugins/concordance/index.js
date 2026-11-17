@@ -9,6 +9,7 @@ import { buildCsvText, copyText, downloadCsv } from "../../lib/_csv.js";
 import {
   attributionFooter, button, checkbox, dataTable, element, field, note, select,
 } from "../../lib/_panel.js";
+import { documentsForSelection } from "../../lib/_documents.js";
 
 // Rendering every row of a corpus-wide match set locks the page up for no
 // benefit — nobody reads row 4000. Exports carry everything.
@@ -100,24 +101,6 @@ export async function searchAsync(documents, query, options = {}, onProgress) {
     if (start + SEARCH_CHUNK_SIZE < corpus.length) await yieldToBrowser();
   }
   return results;
-}
-
-/** Select documents from one source, using selected columns for CSV/TSV files. */
-export function documentsForSelection(documents, tables, source, columns = []) {
-  if (!source || source === "__all__") return documents || [];
-  const table = (tables || []).find((candidate) => candidate.source === source);
-  if (!table) return (documents || []).filter((document) => document.source === source);
-
-  const selected = columns.length ? new Set(columns) : new Set(table.header);
-  return table.rows.map((cells, index) => ({
-    id: `${source}#${index}`,
-    source,
-    speaker: "",
-    text: table.header
-      .map((column, columnIndex) => selected.has(column) ? cells[columnIndex] || "" : "")
-      .filter(Boolean)
-      .join(" "),
-  })).filter((document) => document.text.trim());
 }
 
 const COLUMNS = ["source", "speaker", "left", "keyword", "right"];
