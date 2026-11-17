@@ -53,7 +53,7 @@ defining here.
 - Read `ctx.tables` only. Rows from `.cha`, `.txt` and other non-table
   sources have no columns to carry through to results, so they are out of
   scope for the first version.
-- Results are copied or downloaded as CSV through `src/_csv.js`, never
+- Results are copied or downloaded as CSV through `lib/_csv.js`, never
   written into the folder, as for every other panel.
 - Load the model runtime and model code with dynamic `import()` when the
   person first runs a classification, not when the panel renders. This

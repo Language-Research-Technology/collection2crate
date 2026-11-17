@@ -3,8 +3,8 @@
 // results) and thx01.js (the model's input and probabilities); the models the
 // panel can use are listed in models.js.
 
-import { buildCsvText, copyText, downloadCsv } from "../../src/_csv.js";
-import { button, dataTable, element, field, flashLabel, note, resultsBar, select } from "../../src/_panel.js";
+import { buildCsvText, copyText, downloadCsv } from "../../lib/_csv.js";
+import { button, dataTable, element, field, flashLabel, note, resultsBar, select } from "../../lib/_panel.js";
 import {
   columnValues, compareLabels, assignLabels, defaultLabelSet, labelCounts, normaliseLabelSet,
   resultsTable, rowsForSelection, settingsRecord, withLabelType,
